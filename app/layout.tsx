@@ -3,8 +3,8 @@ import { Providers } from './providers';
 import ErrorBoundary from './components/ErrorBoundary';
 
 export const metadata = {
-  title: 'Payment Splitter | Split Crypto Payments Automatically',
-  description: 'Create smart contracts to automatically split cryptocurrency payments among team members. Support for Ethereum, Polygon, and Arbitrum networks with ETH and USDC.',
+  title: 'Payment Splitter Configuration Tool | Plan Crypto Payment Splits',
+  description: 'Plan and configure cryptocurrency payment splits among team members. Generate configuration files for smart contract deployment on Ethereum, Polygon, and Arbitrum networks.',
   keywords: 'crypto payment splitter, ethereum payment split, team payments, cryptocurrency distribution, smart contract payments, DeFi payments',
   authors: [{ name: 'Payment Splitter Team' }],
   creator: 'Payment Splitter',
@@ -19,8 +19,8 @@ export const metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Payment Splitter | Split Crypto Payments Automatically',
-    description: 'Create smart contracts to automatically split cryptocurrency payments among team members. Support for Ethereum, Polygon, and Arbitrum networks.',
+    title: 'Payment Splitter Configuration Tool | Plan Crypto Payment Splits',
+    description: 'Plan and configure cryptocurrency payment splits among team members. Generate configuration files for smart contract deployment.',
     url: 'https://splitter-ui.netlify.app',
     siteName: 'Payment Splitter',
     locale: 'en_US',
@@ -36,8 +36,8 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Payment Splitter | Split Crypto Payments Automatically',
-    description: 'Create smart contracts to automatically split cryptocurrency payments among team members.',
+    title: 'Payment Splitter Configuration Tool | Plan Crypto Payment Splits',
+    description: 'Plan and configure cryptocurrency payment splits among team members.',
     images: ['/og-image.png'],
   },
   robots: {

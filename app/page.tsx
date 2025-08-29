@@ -115,15 +115,31 @@ export default function Page() {
       <Header />
       <main>
         <section className="mb-6">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 mb-4">
+            <div className="flex">
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-blue-800">
+                  Configuration Tool
+                </h3>
+                <div className="mt-2 text-sm text-blue-700">
+                  <p>
+                    This tool helps you plan and configure payment splits for {token} on {network}. 
+                    It generates a configuration file that can be used with smart contract deployment services. 
+                    <strong className="font-medium"> This does not deploy contracts directly.</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
           <p className="text-sm text-gray-600">
-            Route any incoming {token} on {network} to teammates by fixed percentages. Always test with a small amount first.
+            Plan how to route incoming {token} on {network} to teammates by fixed percentages. Always test with small amounts first when implementing.
           </p>
         </section>
 
         <ol className="mb-6 flex items-center gap-3 text-sm">
           <li className={`rounded-full px-3 py-1 ${step === 1 ? 'bg-black text-white' : 'bg-gray-100'}`}>1. Basics</li>
           <li className={`rounded-full px-3 py-1 ${step === 2 ? 'bg-black text-white' : 'bg-gray-100'}`}>2. Recipients</li>
-          <li className={`rounded-full px-3 py-1 ${step === 3 ? 'bg-black text-white' : 'bg-gray-100'}`}>3. Review & Deploy</li>
+          <li className={`rounded-full px-3 py-1 ${step === 3 ? 'bg-black text-white' : 'bg-gray-100'}`}>3. Review & Export</li>
         </ol>
 
         {step === 1 && (
@@ -328,7 +344,7 @@ export default function Page() {
 
         {step === 3 && (
           <section className="space-y-6">
-            <h2 className="text-lg font-medium">Review & Deploy</h2>
+            <h2 className="text-lg font-medium">Review & Export Configuration</h2>
             <div className="rounded-lg border p-4">
               <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
@@ -377,9 +393,33 @@ export default function Page() {
               <button className="rounded-md border px-4 py-2 text-sm" onClick={() => setStep(2)}>Back</button>
               <button
                 className="rounded-md bg-black px-4 py-2 text-sm text-white"
-                onClick={() => alert('UI mock only — wire Wagmi contract calls next.')}
+                onClick={() => {
+                  const config = {
+                    name,
+                    network,
+                    token,
+                    recipients: recipients.map(r => ({
+                      address: r.input,
+                      percent: Number(r.percent || '0'),
+                      bps: toBps(Number(r.percent || '0'))
+                    }))
+                  };
+                  
+                  const configJson = JSON.stringify(config, null, 2);
+                  const blob = new Blob([configJson], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-config.json`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  
+                  alert(`Configuration saved! This is currently a configuration tool. Your ${name} split configuration has been downloaded as a JSON file. To deploy an actual smart contract, you'll need to use this configuration with a contract deployment service or implement the smart contract functionality.`);
+                }}
               >
-                Deploy
+                Download Config
               </button>
             </div>
           </section>

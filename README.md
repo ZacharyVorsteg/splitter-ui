@@ -1,15 +1,19 @@
-# Payment Splitter
+# Payment Splitter Configuration Tool
 
-A modern web application for creating smart contracts that automatically split cryptocurrency payments among team members. Built with Next.js, Tailwind CSS, and RainbowKit/Wagmi for seamless Web3 integration.
+A modern web application for planning and configuring cryptocurrency payment splits among team members. This tool helps you design payment distribution schemes and generates configuration files that can be used with smart contract deployment services. Built with Next.js, Tailwind CSS, and RainbowKit/Wagmi.
 
 ## Features
 
-- 🔗 **Multi-chain support**: Ethereum, Polygon, and Arbitrum networks
-- 💰 **Token support**: ETH and USDC with extensible architecture
+- 🔗 **Multi-chain planning**: Configure splits for Ethereum, Polygon, and Arbitrum networks
+- 💰 **Token support**: Plan distributions for ETH and USDC with extensible architecture
 - 👥 **Team management**: Add multiple recipients with custom percentages
-- 📊 **Real-time preview**: See payment distributions before deployment
-- 🔒 **Secure**: Built on audited smart contract patterns
+- 📊 **Real-time preview**: See payment distributions before exporting
+- 📄 **Configuration export**: Generate JSON files for use with deployment services
 - 📱 **Responsive**: Works perfectly on desktop and mobile devices
+
+## Important Note
+
+**This is a configuration tool, not a contract deployment service.** It helps you plan payment splits and generates configuration files. To actually deploy smart contracts, you'll need to use the generated configuration with a contract deployment service or implement the smart contract functionality yourself.
 
 ## Quick Start
 
@@ -96,7 +100,7 @@ splitter-ui/
 1. **Configure basics**: Set splitter name, network, and token
 2. **Add recipients**: Input wallet addresses or ENS names with percentages
 3. **Review setup**: Verify all details and percentages sum to 100%
-4. **Deploy contract**: Connect wallet and deploy your payment splitter
+4. **Export configuration**: Download a JSON file with your payment split configuration
 
 ## Contributing
 
