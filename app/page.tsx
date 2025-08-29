@@ -268,142 +268,275 @@ export default function Page() {
         )}
 
         {step === 2 && (
-          <section className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium">Recipients & Shares</h2>
-              {sumChip}
-            </div>
+          <div className="space-y-6">
+            {/* Recipients Header */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm animate-slide-up">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Recipients & Shares</h2>
+                  <p className="text-sm text-gray-600 mt-1">Add wallet addresses and their percentage shares</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Total allocated</div>
+                    <div className={`text-lg font-semibold ${sumOk ? 'text-green-600' : 'text-gray-900'}`}>
+                      {toFixed2(sumPercent)}% of 100%
+                    </div>
+                  </div>
+                  <CSVImporter onImport={handleCSVImport} />
+                </div>
+              </div>
 
-            <div className="rounded-lg border">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">Address or ENS</th>
-                    <th className="px-3 py-2 text-left font-medium">% Share</th>
-                    <th className="px-3 py-2 text-right"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recipients.map((r, i) => {
-                    const { hint } = normalizeAddressOrENS(r.input);
-                    const keyLower = (r.address || r.input.trim()).toLowerCase();
-                    const isDup = keyLower && duplicateAddresses.has(keyLower);
-                    const pct = Number(r.percent || '0');
-                    const pctValid = isFinite(pct) && pct >= 0 && pct <= 100;
+              {/* Progress Bar */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+                  <span>Share Distribution</span>
+                  <span>{sumOk ? 'Complete' : 'In Progress'}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div 
+                    className={`h-3 rounded-full transition-all duration-300 ${
+                      sumOk ? 'bg-green-500' : sumPercent > 100 ? 'bg-red-500' : 'bg-[#0052FF]'
+                    }`}
+                    style={{ width: `${Math.min(sumPercent, 100)}%` }}
+                  ></div>
+                </div>
+                {sumPercent > 100 && (
+                  <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                    <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    Total exceeds 100%. Please adjust your percentages.
+                  </p>
+                )}
+              </div>
 
-                    return (
-                      <tr key={r.id} className="border-t">
-                        <td className="px-3 py-2">
+              {/* Recipients List */}
+              <div className="space-y-4">
+                {recipients.map((r, i) => {
+                  const { hint } = normalizeAddressOrENS(r.input);
+                  const keyLower = (r.address || r.input.trim()).toLowerCase();
+                  const isDup = keyLower && duplicateAddresses.has(keyLower);
+                  const pct = Number(r.percent || '0');
+                  const pctValid = isFinite(pct) && pct >= 0 && pct <= 100;
+
+                  return (
+                    <div key={r.id} className="bg-gray-50 rounded-lg p-4 animate-slide-up">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                            Recipient {i + 1} Address
+                          </label>
                           <input
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
-                            placeholder="0x... or name.eth"
+                            className={`w-full rounded-lg border px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 ${
+                              r.input.trim() && !isDup && hint !== 'Enter 0x… or ENS (.eth)'
+                                ? 'border-gray-300 focus:ring-[#0052FF] focus:border-[#0052FF]'
+                                : r.input.trim()
+                                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                                  : 'border-gray-300 focus:ring-[#0052FF] focus:border-[#0052FF]'
+                            }`}
+                            placeholder="0x742d35Cc6634C0532925a3b8D1c9d9cB2C4c0C0 or vitalik.eth"
                             value={r.input}
                             onChange={e => updateRecipient(r.id, { input: e.target.value })}
                             aria-label={`Recipient ${i + 1} address or ENS`}
                           />
-                          <div className="mt-1 flex items-center gap-2">
-                            <span className="text-xs text-gray-500">{hint}</span>
-                            {isDup && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">Duplicate</span>}
+                          <div className="mt-2 flex items-center gap-3">
+                            {hint && (
+                              <span className={`text-xs flex items-center gap-1 ${
+                                hint === 'Valid address' ? 'text-green-600' :
+                                hint === 'ENS will resolve at deploy' ? 'text-blue-600' : 'text-gray-500'
+                              }`}>
+                                {hint === 'Valid address' && (
+                                  <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                  </svg>
+                                )}
+                                {hint}
+                              </span>
+                            )}
+                            {isDup && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs text-red-800">
+                                <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                                Duplicate address
+                              </span>
+                            )}
                           </div>
-                        </td>
-                        <td className="px-3 py-2">
+                        </div>
+                        
+                        <div className="w-32">
+                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                            Share %
+                          </label>
                           <input
-                            className={`w-32 rounded-md border px-3 py-2 focus:outline-none focus:ring-2 ${
-                              pctValid ? 'focus:ring-black' : 'border-red-400 focus:ring-red-500'
+                            className={`w-full rounded-lg border px-4 py-3 text-sm text-center transition-all focus:outline-none focus:ring-2 ${
+                              pctValid && pct > 0
+                                ? 'border-gray-300 focus:ring-[#0052FF] focus:border-[#0052FF]'
+                                : r.percent.trim()
+                                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                                  : 'border-gray-300 focus:ring-[#0052FF] focus:border-[#0052FF]'
                             }`}
-                            placeholder="0.00"
+                            placeholder="25.0"
                             inputMode="decimal"
                             value={r.percent}
                             onChange={e => {
                               const v = e.target.value.replace(/[^0-9.]/g, '');
                               updateRecipient(r.id, { percent: v });
-                              if (i === recipients.length - 1) setTimeout(autoBalanceLast, 0);
                             }}
                             aria-label={`Recipient ${i + 1} percent`}
                           />
-                        </td>
-                        <td className="px-3 py-2 text-right">
+                          {pct > 0 && (
+                            <div className="mt-1 text-xs text-center text-gray-500">
+                              {toBps(pct)} bps
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-8">
                           <button
-                            className="rounded-md border px-2 py-1"
+                            className="text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg p-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => removeRow(r.id)}
                             aria-label={`Remove recipient ${i + 1}`}
                             disabled={recipients.length === 1}
                           >
-                            Remove
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
                           </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-              <div className="flex items-center justify-between px-3 py-3">
-                <button className="rounded-md border px-3 py-2 text-sm" onClick={addRow}>
-                  + Add recipient
+              {/* Add Recipient Button */}
+              <div className="pt-4 border-t border-gray-200">
+                <button 
+                  className="w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-3 text-sm text-gray-600 hover:border-[#0052FF] hover:text-[#0052FF] transition-all flex items-center justify-center gap-2"
+                  onClick={addRow}
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  Add Another Recipient
                 </button>
-                <CSVImporter onImport={handleCSVImport} />
               </div>
             </div>
 
-            <div className="rounded-lg border p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Payout preview</h3>
-                  <p className="text-xs text-gray-500">Enter a test amount to see per-recipient payouts. USD uses a cached price.</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm">Test amount ({token})</label>
+            {/* Test Your Configuration */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+              <div className="mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Test Your Configuration</h3>
+                <p className="text-sm text-gray-600">Enter a test amount to see how funds would be distributed to each recipient</p>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Test Amount ({token})
+                </label>
+                <div className="relative">
                   <input
-                    className="w-28 rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-4 text-lg font-semibold text-center transition-all focus:outline-none focus:ring-2 focus:ring-[#0052FF] focus:border-[#0052FF]"
+                    placeholder="1.00"
                     value={testAmount}
                     onChange={e => setTestAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                   />
+                  <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">
+                    {token}
+                  </div>
                 </div>
+                {usdPrice && testAmountNum > 0 && (
+                  <p className="mt-2 text-sm text-gray-600 text-center">
+                    ≈ ${toFixed2(testAmountNum * usdPrice)} USD
+                  </p>
+                )}
               </div>
 
-              {!sumOk && <p className="mb-2 text-sm text-amber-700">The total must be exactly 100.00%. Adjust your shares.</p>}
+              {!sumOk && (
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-5 w-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <p className="text-sm font-medium text-amber-800">
+                      Total must be exactly 100.00% to see accurate preview
+                    </p>
+                  </div>
+                </div>
+              )}
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium">Recipient</th>
-                      <th className="px-3 py-2 text-left font-medium">% Share</th>
-                      <th className="px-3 py-2 text-left font-medium">{token} Amount</th>
-                      <th className="px-3 py-2 text-left font-medium">USD (approx)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.map(p => (
-                      <tr key={p.id} className="border-t">
-                        <td className="px-3 py-2">{p.input || '—'}</td>
-                        <td className="px-3 py-2">{toFixed2(p.percent)}%</td>
-                        <td className="px-3 py-2">{toFixed2(p.amount)} {token}</td>
-                        <td className="px-3 py-2">{usdPrice ? `$${toFixed2(p.amount * usdPrice)}` : <span title="No price feed">—</span>}</td>
-                      </tr>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-gray-900 mb-4">Distribution Preview</h4>
+                {preview.length > 0 ? (
+                  <div className="space-y-3">
+                    {preview.map((p, i) => (
+                      <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-white rounded-lg border border-gray-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-[#0052FF] text-white rounded-full flex items-center justify-center text-sm font-medium">
+                            {i + 1}
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900 text-sm">
+                              {p.input || `Recipient ${i + 1}`}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {toFixed2(p.percent)}% share
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-gray-900">
+                            {toFixed2(p.amount)} {token}
+                          </div>
+                          {usdPrice && (
+                            <div className="text-xs text-gray-500">
+                              ${toFixed2(p.amount * usdPrice)} USD
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     ))}
-                    {preview.length === 0 && (
-                      <tr>
-                        <td className="px-3 py-4 text-gray-500" colSpan={4}>Add recipients and reach 100% to see preview.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <svg className="h-12 w-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-sm">Add recipients and reach 100% to see distribution preview</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <button className="rounded-md border px-4 py-2 text-sm" onClick={() => setStep(1)}>Back</button>
+            {/* Navigation */}
+            <div className="flex items-center justify-between pt-6">
+              <button 
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all flex items-center gap-2"
+                onClick={() => setStep(1)}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Back to Configuration
+              </button>
               <button
                 disabled={!canNextFromStep2()}
-                className={`rounded-md px-4 py-2 text-sm text-white ${canNextFromStep2() ? 'bg-black' : 'bg-gray-400'}`}
+                className={`rounded-lg px-6 py-3 text-sm font-medium transition-all flex items-center gap-2 shadow-sm ${
+                  canNextFromStep2() 
+                    ? 'bg-[#0052FF] text-white hover:bg-[#0041CC] hover:shadow-md' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
                 onClick={() => setStep(3)}
               >
-                Review
+                Review & Deploy
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </button>
             </div>
-          </section>
+          </div>
         )}
 
         {step === 3 && (
