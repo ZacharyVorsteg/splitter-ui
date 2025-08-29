@@ -35,7 +35,7 @@ interface NetworkHealth {
 
 const PRICE_STALE_THRESHOLD = 60000; // 1 minute
 const GAS_STALE_THRESHOLD = 30000; // 30 seconds
-const PRICE_POLL_INTERVAL = 10000; // 10 seconds
+const PRICE_POLL_INTERVAL = 5000; // 5 seconds for more frequent updates
 const GAS_POLL_INTERVAL = 15000; // 15 seconds
 
 export const useLiveData = () => {
@@ -100,13 +100,13 @@ export const useLiveData = () => {
           })
         },
         {
-          name: 'Binance',
-          url: 'https://api.binance.com/api/v3/ticker/24hr?symbol=ETHUSDT',
-          parser: (data: { lastPrice?: string; priceChangePercent?: string; highPrice?: string; lowPrice?: string }) => ({
-            price: parseFloat(data.lastPrice || '0'),
-            change24h: parseFloat(data.priceChangePercent || '0'),
-            high24h: parseFloat(data.highPrice || '0'),
-            low24h: parseFloat(data.lowPrice || '0')
+          name: 'Kraken',
+          url: 'https://api.kraken.com/0/public/Ticker?pair=ETHUSD',
+          parser: (data: { result?: { XETHZUSD?: { c?: [string]; p?: [string, string]; h?: [string]; l?: [string] } } }) => ({
+            price: parseFloat(data.result?.XETHZUSD?.c?.[0] || '0'),
+            change24h: null, // Kraken doesn't provide 24h change in this endpoint
+            high24h: parseFloat(data.result?.XETHZUSD?.h?.[0] || '0'),
+            low24h: parseFloat(data.result?.XETHZUSD?.l?.[0] || '0')
           })
         },
         {
@@ -272,80 +272,12 @@ export const useLiveData = () => {
     fetchEthPrice();
     fetchGasData();
 
-    // Try WebSocket for real-time data first, fallback to polling
-    let ws: WebSocket | null = null;
-    let reconnectTimeout: NodeJS.Timeout | null = null;
+    // Use polling for reliable cross-geo compatibility
     let priceInterval: NodeJS.Timeout | null = null;
     
-    const connectWebSocket = () => {
-      try {
-        // Use Binance WebSocket for real-time ETH price
-        ws = new WebSocket('wss://stream.binance.com:9443/ws/ethusdt@ticker');
-        
-        ws.onopen = () => {
-          console.log('WebSocket connected for real-time ETH prices');
-          // Clear polling interval since we have WebSocket
-          if (priceInterval) {
-            clearInterval(priceInterval);
-            priceInterval = null;
-          }
-        };
-        
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            const price = parseFloat(data.c); // Current price
-            const change24h = parseFloat(data.P); // 24h change percentage
-            const high24h = parseFloat(data.h); // 24h high
-            const low24h = parseFloat(data.l); // 24h low
-            
-            // Sanity check
-            if (price > 1000 && price < 10000) {
-              setEthPrice({
-                usd: price,
-                change24h: change24h,
-                high24h: high24h,
-                low24h: low24h,
-                lastUpdated: Date.now(),
-                source: 'Binance WebSocket',
-                isStale: false,
-                isLoading: false,
-                error: null,
-              });
-            }
-          } catch (error) {
-            console.warn('WebSocket message parsing error:', error);
-          }
-        };
-        
-        ws.onerror = (error) => {
-          console.warn('WebSocket error:', error);
-        };
-        
-        ws.onclose = () => {
-          console.log('WebSocket closed, falling back to polling...');
-          ws = null;
-          
-          // Fallback to polling
-          if (!priceInterval) {
-            priceInterval = setInterval(fetchEthPrice, PRICE_POLL_INTERVAL);
-          }
-          
-          // Try to reconnect WebSocket after 10 seconds
-          reconnectTimeout = setTimeout(connectWebSocket, 10000);
-        };
-        
-      } catch (error) {
-        console.warn('WebSocket connection failed, using polling:', error);
-        // Start polling immediately if WebSocket fails
-        if (!priceInterval) {
-          priceInterval = setInterval(fetchEthPrice, PRICE_POLL_INTERVAL);
-        }
-      }
-    };
-
-    // Try WebSocket first
-    connectWebSocket();
+    // Start with polling immediately (WebSocket removed due to geo-restrictions)
+    priceInterval = setInterval(fetchEthPrice, PRICE_POLL_INTERVAL);
+    console.log('Started price polling every 5 seconds');
 
     // Always set up gas polling (no reliable WebSocket for gas prices)
     const gasInterval = setInterval(fetchGasData, GAS_POLL_INTERVAL);
@@ -353,12 +285,6 @@ export const useLiveData = () => {
 
     return () => {
       // Cleanup
-      if (ws) {
-        ws.close();
-      }
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
       if (priceInterval) {
         clearInterval(priceInterval);
       }

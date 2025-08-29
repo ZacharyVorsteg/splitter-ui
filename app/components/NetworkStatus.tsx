@@ -33,12 +33,26 @@ export default function NetworkStatus({ ethPrice, gasData, networkName, onRefres
   const getTimeAgo = (timestamp: number | null) => {
     if (!timestamp) return 'Never';
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 10) return 'Just now';
+    if (seconds < 5) return 'Just now';
     if (seconds < 60) return `${seconds}s ago`;
     const minutes = Math.floor(seconds / 60);
     if (minutes < 60) return `${minutes}m ago`;
     const hours = Math.floor(minutes / 60);
     return `${hours}h ago`;
+  };
+
+  const getUpdateIndicator = (timestamp: number | null) => {
+    if (!timestamp) return null;
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 10) {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-medium">
+          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+          UPDATING
+        </span>
+      );
+    }
+    return null;
   };
 
   const formatPrice = (price: number | null) => {
@@ -109,19 +123,12 @@ export default function NetworkStatus({ ethPrice, gasData, networkName, onRefres
 
         {/* Last Updated & Refresh */}
         <div className="flex items-center gap-4">
-          <div className="text-xs text-gray-500">
-            Updated {getTimeAgo(ethPrice.lastUpdated)}
+          <div className="text-xs text-gray-500 flex items-center gap-2">
+            <span>Updated {getTimeAgo(ethPrice.lastUpdated)}</span>
             {ethPrice.source && (
-              <span className="ml-1 flex items-center gap-1">
-                via {ethPrice.source}
-                {ethPrice.source === 'Binance WebSocket' && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-medium">
-                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                    LIVE
-                  </span>
-                )}
-              </span>
+              <span>via {ethPrice.source}</span>
             )}
+            {getUpdateIndicator(ethPrice.lastUpdated)}
           </div>
           
           <button
