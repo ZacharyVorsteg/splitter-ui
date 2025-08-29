@@ -35,7 +35,7 @@ interface NetworkHealth {
 
 const PRICE_STALE_THRESHOLD = 60000; // 1 minute
 const GAS_STALE_THRESHOLD = 30000; // 30 seconds
-const PRICE_POLL_INTERVAL = 5000; // 5 seconds for more frequent updates
+const PRICE_POLL_INTERVAL = 3000; // 3 seconds for responsive updates
 const GAS_POLL_INTERVAL = 15000; // 15 seconds
 
 export const useLiveData = () => {
@@ -84,10 +84,11 @@ export const useLiveData = () => {
 
   // Fetch ETH price from multiple sources with validation
   const fetchEthPrice = useCallback(async () => {
+    const startTime = Date.now();
     try {
       setEthPrice(prev => ({ ...prev, isLoading: true, error: null }));
 
-      // Try multiple sources in parallel for validation
+      // Use only reliable, fast APIs
       const sources = [
         {
           name: 'CoinGecko',
@@ -102,23 +103,20 @@ export const useLiveData = () => {
         {
           name: 'Kraken',
           url: 'https://api.kraken.com/0/public/Ticker?pair=ETHUSD',
-          parser: (data: { result?: { XETHZUSD?: { c?: [string]; p?: [string, string]; h?: [string]; l?: [string] } } }) => ({
-            price: parseFloat(data.result?.XETHZUSD?.c?.[0] || '0'),
-            change24h: null, // Kraken doesn't provide 24h change in this endpoint
-            high24h: parseFloat(data.result?.XETHZUSD?.h?.[0] || '0'),
-            low24h: parseFloat(data.result?.XETHZUSD?.l?.[0] || '0')
-          })
-        },
-        {
-          name: 'CoinCap',
-          url: 'https://api.coincap.io/v2/assets/ethereum',
-          parser: (data: { data?: { priceUsd?: string; changePercent24Hr?: string } }) => ({
-            price: parseFloat(data.data?.priceUsd || '0'),
-            change24h: parseFloat(data.data?.changePercent24Hr || '0'),
-            high24h: null,
-            low24h: null
-          })
+          parser: (data: { result?: { XETHZUSD?: { c?: [string]; h?: [string]; l?: [string]; o?: string } } }) => {
+            const current = parseFloat(data.result?.XETHZUSD?.c?.[0] || '0');
+            const open = parseFloat(data.result?.XETHZUSD?.o || '0');
+            const change24h = open > 0 ? ((current - open) / open) * 100 : null;
+            
+            return {
+              price: current,
+              change24h: change24h,
+              high24h: parseFloat(data.result?.XETHZUSD?.h?.[0] || '0'),
+              low24h: parseFloat(data.result?.XETHZUSD?.l?.[0] || '0')
+            };
+          }
         }
+        // Removed CoinCap - API is broken and returns HTML
       ];
 
       const results = await Promise.allSettled(
@@ -173,18 +171,32 @@ export const useLiveData = () => {
         }
       }
 
-      console.log(`ETH price fetched: $${primaryResult.price} from ${primaryResult.source}`);
+      const fetchDuration = Date.now() - startTime;
+      const newPrice = primaryResult.price;
+      
+      // Update state and log the change
+      setEthPrice(prev => {
+        const priceChanged = prev.usd !== newPrice;
+        const priceChangeAmount = prev.usd ? newPrice - prev.usd : 0;
+        const priceChangePercent = prev.usd ? ((priceChangeAmount / prev.usd) * 100) : 0;
+        
+        if (priceChanged) {
+          console.log(`🔄 ETH price updated: $${prev.usd?.toFixed(2)} → $${newPrice.toFixed(2)} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(4)}%) via ${primaryResult.source} in ${fetchDuration}ms`);
+        } else {
+          console.log(`✅ ETH price confirmed: $${newPrice.toFixed(2)} via ${primaryResult.source} in ${fetchDuration}ms`);
+        }
 
-      setEthPrice({
-        usd: primaryResult.price,
-        change24h: primaryResult.change24h || 0,
-        high24h: primaryResult.high24h || primaryResult.price,
-        low24h: primaryResult.low24h || primaryResult.price,
-        lastUpdated: Date.now(),
-        source: primaryResult.source,
-        isStale: false,
-        isLoading: false,
-        error: null,
+        return {
+          usd: newPrice,
+          change24h: primaryResult.change24h || 0,
+          high24h: primaryResult.high24h || newPrice,
+          low24h: primaryResult.low24h || newPrice,
+          lastUpdated: Date.now(),
+          source: primaryResult.source,
+          isStale: false,
+          isLoading: false,
+          error: null,
+        };
       });
 
     } catch (error) {
@@ -196,7 +208,7 @@ export const useLiveData = () => {
         isStale: true,
       }));
     }
-  }, []);
+  }, []); // Stable callback - no dependencies needed
 
   // Fetch gas prices (simplified - in production you'd use APIs like ETH Gas Station)
   const fetchGasData = useCallback(async () => {
@@ -249,7 +261,7 @@ export const useLiveData = () => {
         network: 'ethereum',
       });
     }
-  }, []);
+  }, []); // Stable callback
 
   // Check if data is stale
   const checkStaleness = useCallback(() => {
@@ -264,7 +276,7 @@ export const useLiveData = () => {
       ...prev,
       isStale: prev.lastUpdated ? (now - prev.lastUpdated) > GAS_STALE_THRESHOLD : true
     }));
-  }, []);
+  }, []); // Stable callback
 
   // Initialize and set up real-time connections
   useEffect(() => {
@@ -277,7 +289,7 @@ export const useLiveData = () => {
     
     // Start with polling immediately (WebSocket removed due to geo-restrictions)
     priceInterval = setInterval(fetchEthPrice, PRICE_POLL_INTERVAL);
-    console.log('Started price polling every 5 seconds');
+    console.log('🚀 Started aggressive price polling every 3 seconds for optimal slippage protection');
 
     // Always set up gas polling (no reliable WebSocket for gas prices)
     const gasInterval = setInterval(fetchGasData, GAS_POLL_INTERVAL);
@@ -291,7 +303,7 @@ export const useLiveData = () => {
       clearInterval(gasInterval);
       clearInterval(stalenessInterval);
     };
-  }, [fetchEthPrice, fetchGasData, checkStaleness]);
+  }, []); // All callbacks are now stable with empty deps
 
   // Calculate gas cost in USD
   const calculateGasCost = useCallback((gasLimit: number = 21000, speed: 'standard' | 'fast' | 'instant' = 'standard') => {

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface NetworkStatusProps {
   ethPrice: {
@@ -23,6 +23,21 @@ interface NetworkStatusProps {
 }
 
 export default function NetworkStatus({ ethPrice, gasData, networkName, onRefresh }: NetworkStatusProps) {
+  const [lastPrice, setLastPrice] = useState<number | null>(null);
+  const [showPriceUpdate, setShowPriceUpdate] = useState(false);
+
+  // Detect price changes and show visual feedback
+  useEffect(() => {
+    if (ethPrice.usd && lastPrice && ethPrice.usd !== lastPrice) {
+      setShowPriceUpdate(true);
+      // Hide the indicator after 2 seconds
+      const timeout = setTimeout(() => setShowPriceUpdate(false), 2000);
+      return () => clearTimeout(timeout);
+    }
+    if (ethPrice.usd) {
+      setLastPrice(ethPrice.usd);
+    }
+  }, [ethPrice.usd, lastPrice]);
   const getStatusColor = (isStale: boolean, isLoading: boolean, error: string | null) => {
     if (error) return 'bg-red-500';
     if (isStale) return 'bg-yellow-500';
@@ -96,10 +111,18 @@ export default function NetworkStatus({ ethPrice, gasData, networkName, onRefres
                 <span className="text-sm text-red-600">Error</span>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-gray-900">
+                  <span className={`text-sm font-semibold transition-all duration-300 ${
+                    showPriceUpdate ? 'text-green-600 scale-105' : 'text-gray-900'
+                  }`}>
                     {formatPrice(ethPrice.usd)}
                   </span>
                   {formatChange(ethPrice.change24h)}
+                  {showPriceUpdate && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-medium animate-pulse">
+                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                      UPDATED
+                    </span>
+                  )}
                 </div>
               )}
             </div>

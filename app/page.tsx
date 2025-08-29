@@ -286,8 +286,16 @@ export default function Page() {
                         {token === 'USDC' && 'Stable value pegged to USD, great for predictable splits.'}
                       </p>
                       {token === 'ETH' && ethPrice.lastUpdated && (
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-500 flex items-center gap-1">
+                          <div className={`w-1.5 h-1.5 rounded-full ${
+                            ethPrice.error ? 'bg-red-500' : 
+                            ethPrice.isStale ? 'bg-yellow-500' : 
+                            'bg-green-500 animate-pulse'
+                          }`}></div>
                           Updated {Math.floor((Date.now() - ethPrice.lastUpdated) / 1000)}s ago
+                          {ethPrice.source && (
+                            <span className="text-blue-600">({ethPrice.source})</span>
+                          )}
                         </span>
                       )}
                     </div>
