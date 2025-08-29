@@ -39,7 +39,7 @@ export async function getFeeQuote(network: "ethereum" | "polygon") {
     const max = (base * BigInt(120)) / BigInt(100) + priority; // 20% headroom
     return { base, priority, max };
     
-  } catch (error) {
+  } catch {
     // Fallback estimates if RPC fails
     const estimates = {
       ethereum: { base: BigInt(20) * BigInt(10) ** BigInt(9), priority: BigInt(2) * BigInt(10) ** BigInt(9) },

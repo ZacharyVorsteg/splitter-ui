@@ -6,11 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint",
-    "compile": "hardhat compile",
-    "deploy:amoy": "hardhat run scripts/deployFactory.js --network amoy",
-    "deploy:polygon": "hardhat run scripts/deployFactory.js --network polygon",
-    "deploy:arbitrum": "hardhat run scripts/deployFactory.js --network arbitrum"
+    "lint": "eslint"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.4.0",
@@ -25,16 +21,12 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@nomicfoundation/hardhat-ethers": "^4.0.0",
-    "@nomicfoundation/hardhat-verify": "^3.0.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "dotenv": "^17.2.1",
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
-    "hardhat": "^3.0.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

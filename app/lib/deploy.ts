@@ -1,6 +1,6 @@
 import { BrowserProvider, Contract, JsonRpcSigner, isAddress, parseEther } from "ethers";
 
-async function resolveAddress(input: string, provider: BrowserProvider): Promise<string> {
+async function resolveAddress(input: string): Promise<string> {
   const address = input.trim();
   
   if (isAddress(address)) {
@@ -62,7 +62,7 @@ export async function deploySplitter(
   payees: string[], 
   shares: number[]
 ): Promise<string> {
-  const { provider, signer, chainId } = await getSigner();
+  const { signer, chainId } = await getSigner();
   const factoryAddr = FACTORY_ADDRESSES[chainId];
   
   const factoryStatus = getFactoryStatus(chainId);
@@ -74,7 +74,7 @@ export async function deploySplitter(
   const resolvedPayees = await Promise.all(
     payees.map(async (payee) => {
       try {
-        return await resolveAddress(payee, provider);
+        return await resolveAddress(payee);
       } catch (error) {
         throw new Error(`Invalid address "${payee}": ${error instanceof Error ? error.message : 'Unknown error'}`);
       }

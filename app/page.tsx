@@ -1,10 +1,9 @@
 'use client';
 import React, { useMemo, useRef, useState } from 'react';
 import Header from './components/Header';
-import NetworkStatus from './components/NetworkStatus';
-import { startPriceWS, priceMap, getEthUsd, getMaticUsd } from './lib/coinbaseWS';
+import { startPriceWS, getEthUsd, getMaticUsd } from './lib/coinbaseWS';
 import { getFeeQuote, estimateUsd, formatGwei } from './lib/gas';
-import { deploySplitter, getFactoryStatus, type DeployedSplitter } from './lib/deploy';
+import { deploySplitter, getFactoryStatus } from './lib/deploy';
 import { useAccount } from 'wagmi';
 
 type Recipient = { id: string; input: string; address: string | null; percent: string };
@@ -35,7 +34,7 @@ export default function Page() {
   const [lastPriceUpdate, setLastPriceUpdate] = useState<number>(0);
   
   // Wallet connection
-  const { address: connectedAddress, isConnected: walletConnected } = useAccount();
+  const { isConnected: walletConnected } = useAccount();
   
   // Deployment state
   const [isDeploying, setIsDeploying] = useState(false);
@@ -77,13 +76,6 @@ export default function Page() {
     return { address: null, hint: 'Enter 0x… or ENS (.eth)' };
   }
 
-  function autoBalanceLast() {
-    if (recipients.length < 2) return;
-    const others = recipients.slice(0, -1).reduce((a, r) => a + (Number(r.percent || '0') || 0), 0);
-    const remainder = Math.max(0, 100 - others);
-    updateRecipient(recipients[recipients.length - 1].id, { percent: toFixed2(remainder) });
-  }
-
   function handleCSVImport(text: string) {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const rows: Recipient[] = lines.map(l => {
@@ -117,17 +109,7 @@ export default function Page() {
     return nonEmpty && validPercent && sumOk && noDups;
   }
 
-  const sumChip = (
-    <span
-      className={
-        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ' +
-        (sumOk ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')
-      }
-      aria-live="polite"
-    >
-      Sum = {toFixed2(sumPercent)}%
-    </span>
-  );
+
 
   // Initialize price tracking
   React.useEffect(() => {
@@ -155,7 +137,7 @@ export default function Page() {
           network: networkKey
         });
         setGasUsd(usd || null);
-      } catch (error) {
+      } catch {
         // Fallback estimates
         setGasGwei(network === 'Polygon' ? 50 : 25);
         setGasUsd(network === 'Polygon' ? 0.01 : 15);
