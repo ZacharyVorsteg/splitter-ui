@@ -1,19 +1,24 @@
-# Payment Splitter Configuration Tool
+# Payment Splitter
 
-A modern web application for planning and configuring cryptocurrency payment splits among team members. This tool helps you design payment distribution schemes and generates configuration files that can be used with smart contract deployment services. Built with Next.js, Tailwind CSS, and RainbowKit/Wagmi.
+A complete DeFi application for deploying and managing smart contracts that automatically split cryptocurrency payments among team members. Built with Next.js, Tailwind CSS, RainbowKit/Wagmi, and OpenZeppelin contracts.
 
 ## Features
 
-- 🔗 **Multi-chain planning**: Configure splits for Ethereum, Polygon, and Arbitrum networks
-- 💰 **Token support**: Plan distributions for ETH and USDC with extensible architecture
+- 🚀 **Smart Contract Deployment**: Deploy real PaymentSplitter contracts to Polygon and Ethereum
+- 💰 **Multi-token support**: Split ETH, MATIC, USDC, and other ERC20 tokens
 - 👥 **Team management**: Add multiple recipients with custom percentages
-- 📊 **Real-time preview**: See payment distributions before exporting
-- 📄 **Configuration export**: Generate JSON files for use with deployment services
-- 📱 **Responsive**: Works perfectly on desktop and mobile devices
+- 📊 **Real-time pricing**: Live ETH and MATIC prices via Coinbase WebSocket
+- ⛽ **Live gas tracking**: Real-time gas estimates using eth_feeHistory
+- 🔗 **Multi-chain support**: Polygon (low fees), Ethereum, and Arbitrum networks
+- 📱 **Responsive design**: Works perfectly on desktop and mobile devices
+- 🔒 **Non-custodial**: Your keys, your contracts, your control
 
-## Important Note
+## How It Works
 
-**This is a configuration tool, not a contract deployment service.** It helps you plan payment splits and generates configuration files. To actually deploy smart contracts, you'll need to use the generated configuration with a contract deployment service or implement the smart contract functionality yourself.
+1. **Configure**: Set up your payment split with recipient addresses and percentages
+2. **Deploy**: Connect your wallet and deploy a real smart contract to the blockchain  
+3. **Fund**: Send cryptocurrency to the contract address
+4. **Distribute**: Recipients can claim their shares anytime, or use batch release
 
 ## Quick Start
 

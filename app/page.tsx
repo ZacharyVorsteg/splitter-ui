@@ -2,8 +2,9 @@
 import React, { useMemo, useRef, useState } from 'react';
 import Header from './components/Header';
 import NetworkStatus from './components/NetworkStatus';
-import { useLiveData } from './hooks/useLiveData';
-import { getContractDeployer, type SplitterConfig, type DeployResult } from './utils/contractDeploy';
+import { startPriceWS, priceMap, getEthUsd, getMaticUsd } from './lib/coinbaseWS';
+import { getFeeQuote, estimateUsd, formatGwei } from './lib/gas';
+import { deploySplitter, type DeployedSplitter } from './lib/deploy';
 import { useAccount } from 'wagmi';
 
 type Recipient = { id: string; input: string; address: string | null; percent: string };
@@ -26,15 +27,19 @@ export default function Page() {
   ]);
   const [testAmount, setTestAmount] = useState<string>('1.00');
   
-  // Use live data instead of static values
-  const { ethPrice, usdcPrice, maticPrice, gasData, calculateGasCost, refresh, getVolatilityLevel, isConnected } = useLiveData();
+  // Live price and gas tracking
+  const [ethPrice, setEthPrice] = useState<number | null>(null);
+  const [maticPrice, setMaticPrice] = useState<number | null>(null);
+  const [gasGwei, setGasGwei] = useState<number | null>(null);
+  const [gasUsd, setGasUsd] = useState<number | null>(null);
+  const [lastPriceUpdate, setLastPriceUpdate] = useState<number>(0);
   
   // Wallet connection
   const { address: connectedAddress, isConnected: walletConnected } = useAccount();
   
   // Deployment state
   const [isDeploying, setIsDeploying] = useState(false);
-  const [deployResult, setDeployResult] = useState<DeployResult | null>(null);
+  const [deployResult, setDeployResult] = useState<string | null>(null);
   const [deployError, setDeployError] = useState<string | null>(null);
 
   const parsedPercents = recipients.map(r => Number(r.percent || '0'));
@@ -124,18 +129,65 @@ export default function Page() {
     </span>
   );
 
+  // Initialize price tracking
+  React.useEffect(() => {
+    startPriceWS();
+    
+    const updatePrices = () => {
+      const ethUsd = getEthUsd();
+      const maticUsd = getMaticUsd();
+      
+      if (ethUsd !== ethPrice) setEthPrice(ethUsd || null);
+      if (maticUsd !== maticPrice) setMaticPrice(maticUsd || null);
+      setLastPriceUpdate(Date.now());
+    };
+    
+    const updateGas = async () => {
+      try {
+        const networkKey = network.toLowerCase() as 'ethereum' | 'polygon';
+        const quote = await getFeeQuote(networkKey);
+        const gwei = formatGwei(quote.max);
+        setGasGwei(gwei);
+        
+        const { usd } = estimateUsd({
+          gasUnits: 150000,
+          maxFeePerGasWei: quote.max,
+          network: networkKey
+        });
+        setGasUsd(usd || null);
+      } catch (error) {
+        // Fallback estimates
+        setGasGwei(network === 'Polygon' ? 50 : 25);
+        setGasUsd(network === 'Polygon' ? 0.01 : 15);
+      }
+    };
+    
+    // Initial updates
+    updatePrices();
+    updateGas();
+    
+    // Regular updates
+    const priceInterval = setInterval(updatePrices, 1000);
+    const gasInterval = setInterval(updateGas, 10000);
+    
+    return () => {
+      clearInterval(priceInterval);
+      clearInterval(gasInterval);
+    };
+  }, [network, ethPrice, maticPrice]);
+
   // Get current price for calculations
-  const currentPrice = token === 'ETH' ? ethPrice.usd : usdcPrice.usd;
+  const currentPrice = token === 'ETH' ? ethPrice : (token === 'USDC' ? 1.0 : null);
 
   // Deploy splitter contract
   const deployContract = async () => {
     if (!walletConnected) {
-      alert('Please connect your wallet first');
+      setDeployError('Please connect your wallet first');
       return;
     }
 
     if (!sumOk) {
-      alert('Total percentage must equal 100% before deploying');
+      setDeployError('Total percentage must equal 100% before deploying');
       return;
     }
 
@@ -143,26 +195,13 @@ export default function Page() {
       setIsDeploying(true);
       setDeployError(null);
 
-      const config: SplitterConfig = {
-        name,
-        network,
-        token,
-        recipients: recipients.map(r => ({
-          address: r.input,
-          percent: Number(r.percent || '0'),
-          bps: toBps(Number(r.percent || '0'))
-        }))
-      };
+      const payees = recipients.map(r => r.input);
+      const shares = recipients.map(r => toBps(Number(r.percent || '0')));
 
-      const ethPriceForGas = ethPrice.usd || 4000; // Fallback price
-      const deployer = getContractDeployer();
-      const result = await deployer.deployFromConfig(config, ethPriceForGas);
-      
-      setDeployResult(result);
-      console.log('🎉 Splitter deployed successfully:', result);
+      const splitterAddress = await deploySplitter(name, payees, shares);
+      setDeployResult(splitterAddress);
 
     } catch (error) {
-      console.error('❌ Deployment failed:', error);
       setDeployError(error instanceof Error ? error.message : 'Deployment failed');
     } finally {
       setIsDeploying(false);
@@ -172,12 +211,52 @@ export default function Page() {
   return (
     <>
       <Header currentStep={step} totalSteps={3} />
-      <NetworkStatus 
-        ethPrice={ethPrice}
-        gasData={gasData}
-        networkName={network}
-        onRefresh={refresh}
-      />
+      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            {/* Network Status */}
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              <span className="text-sm font-medium text-gray-900">{network}</span>
+            </div>
+
+            {/* ETH Price */}
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${ethPrice ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">ETH:</span>
+                {ethPrice ? (
+                  <span className="text-sm font-semibold text-gray-900">
+                    ${ethPrice.toFixed(2)}
+                  </span>
+                ) : (
+                  <span className="text-sm text-gray-500">Loading...</span>
+                )}
+              </div>
+            </div>
+
+            {/* Gas Price */}
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${gasGwei ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Gas:</span>
+                {gasGwei ? (
+                  <span className="text-sm font-medium text-gray-900">
+                    {gasGwei.toFixed(1)} gwei
+                    {gasUsd && ` • $${gasUsd.toFixed(4)}`}
+                  </span>
+                ) : (
+                  <span className="text-sm text-gray-500">Loading...</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="text-xs text-gray-500">
+            Updated {Math.floor((Date.now() - lastPriceUpdate) / 1000)}s ago
+          </div>
+        </div>
+      </div>
       <main className="space-y-6">
 
         {step === 1 && (
@@ -255,22 +334,13 @@ export default function Page() {
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-600">Gas estimate:</span>
                       <div className="text-right">
-                        {network === 'Ethereum' && gasData.standard && !gasData.isStale ? (
-                          <div>
-                            <span className="font-medium text-gray-900">
-                              ${calculateGasCost(150000, 'standard')?.usd.toFixed(2)} (Standard)
-                            </span>
-                            <div className="text-xs text-gray-500">
-                              ${calculateGasCost(150000, 'fast')?.usd.toFixed(2)} (Fast)
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="font-medium text-gray-900">
-                            {network === 'Polygon' && '~$0.01'}
-                            {network === 'Ethereum' && gasData.isStale ? '~$15-50' : 'Loading...'}
-                            {network === 'Arbitrum' && '~$0.50'}
-                          </span>
-                        )}
+                        <span className="font-medium text-gray-900">
+                          {gasUsd ? `$${gasUsd.toFixed(4)}` : (
+                            network === 'Polygon' ? '~$0.01' :
+                            network === 'Arbitrum' ? '~$0.50' : 
+                            '~$15-50'
+                          )}
+                        </span>
                       </div>
                     </div>
                     <p className="mt-1 text-xs text-gray-600">
@@ -278,9 +348,9 @@ export default function Page() {
                       {network === 'Ethereum' && 'Most secure and decentralized, but higher fees.'}
                       {network === 'Arbitrum' && 'Layer 2 solution with lower fees than Ethereum.'}
                     </p>
-                    {network === 'Ethereum' && gasData.isStale && (
+                    {!gasUsd && (
                       <p className="mt-1 text-xs text-amber-600">
-                        ⚠️ Gas estimates may be outdated
+                        ⚠️ Loading live gas estimates...
                       </p>
                     )}
                   </div>
@@ -309,21 +379,10 @@ export default function Page() {
                       <span className="text-gray-600">Current price:</span>
                       <div className="text-right">
                         {token === 'ETH' ? (
-                          ethPrice.isLoading ? (
-                            <div className="animate-pulse bg-gray-200 h-4 w-16 rounded"></div>
-                          ) : ethPrice.error ? (
-                            <span className="text-red-600">Error</span>
-                          ) : ethPrice.usd ? (
-                            <div>
-                              <span className="font-medium text-gray-900">
-                                ${ethPrice.usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                              {ethPrice.change24h && (
-                                <div className={`text-xs ${ethPrice.change24h > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {ethPrice.change24h > 0 ? '↑' : '↓'}{Math.abs(ethPrice.change24h).toFixed(1)}%
-                                </div>
-                              )}
-                            </div>
+                          ethPrice ? (
+                            <span className="font-medium text-gray-900">
+                              ${ethPrice.toFixed(2)}
+                            </span>
                           ) : (
                             <span className="text-gray-500">Loading...</span>
                           )
@@ -337,23 +396,16 @@ export default function Page() {
                         {token === 'ETH' && 'Native token, widely accepted across DeFi.'}
                         {token === 'USDC' && 'Stable value pegged to USD, great for predictable splits.'}
                       </p>
-                      {token === 'ETH' && ethPrice.lastUpdated && (
+                      {token === 'ETH' && ethPrice && (
                         <span className="text-xs text-gray-500 flex items-center gap-1">
-                          <div className={`w-1.5 h-1.5 rounded-full ${
-                            ethPrice.error ? 'bg-red-500' : 
-                            ethPrice.isStale ? 'bg-yellow-500' : 
-                            'bg-green-500 animate-pulse'
-                          }`}></div>
-                          Updated {Math.floor((Date.now() - ethPrice.lastUpdated) / 1000)}s ago
-                          {ethPrice.source && (
-                            <span className="text-blue-600">({ethPrice.source})</span>
-                          )}
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                          Live price
                         </span>
                       )}
                     </div>
-                    {token === 'ETH' && ethPrice.isStale && (
+                    {token === 'ETH' && !ethPrice && (
                       <p className="mt-1 text-xs text-amber-600">
-                        ⚠️ Price data may be outdated
+                        ⚠️ Loading live price data...
                       </p>
                     )}
                   </div>
@@ -573,12 +625,6 @@ export default function Page() {
                 {currentPrice && testAmountNum > 0 && (
                   <p className="mt-2 text-sm text-gray-600 text-center">
                     ≈ ${toFixed2(testAmountNum * currentPrice)} USD
-                    {token === 'ETH' && ethPrice.change24h && Math.abs(ethPrice.change24h) > 2 && (
-                      <span className="block text-xs text-amber-600 mt-1">
-                        ±${toFixed2(testAmountNum * currentPrice * Math.abs(ethPrice.change24h) / 100)} 
-                        ({Math.abs(ethPrice.change24h).toFixed(1)}% volatility)
-                      </span>
-                    )}
                   </p>
                 )}
               </div>
@@ -622,9 +668,6 @@ export default function Page() {
                           {currentPrice && (
                             <div className="text-xs text-gray-500">
                               ${toFixed2(p.amount * currentPrice)} USD
-                              {token === 'ETH' && ethPrice.isStale && (
-                                <span className="text-amber-600 ml-1">*</span>
-                              )}
                             </div>
                           )}
                         </div>
@@ -679,20 +722,20 @@ export default function Page() {
               {/* Configuration Summary */}
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <h3 className="text-sm font-medium text-gray-900 mb-3">Configuration Summary</h3>
-                <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div>
-                    <dt className="text-xs text-gray-500">Name</dt>
-                    <dd className="font-medium">{name}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-gray-500">Network</dt>
-                    <dd className="font-medium">{network}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-gray-500">Token</dt>
-                    <dd className="font-medium">{token}</dd>
-                  </div>
-                </dl>
+              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <dt className="text-xs text-gray-500">Name</dt>
+                  <dd className="font-medium">{name}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-500">Network</dt>
+                  <dd className="font-medium">{network}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-500">Token</dt>
+                  <dd className="font-medium">{token}</dd>
+                </div>
+              </dl>
                 
                 <div className="mt-4">
                   <h4 className="text-sm font-medium text-gray-900 mb-2">Recipients ({recipients.length})</h4>
@@ -752,9 +795,7 @@ export default function Page() {
                     <div>
                       <span className="text-yellow-700">Network Fee:</span>
                       <span className="font-medium ml-2">
-                        {gasData.standard && currentPrice ? (
-                          `~$${((150000 * gasData.standard * 1e-9) * currentPrice).toFixed(4)}`
-                        ) : (
+                        {gasUsd ? `$${gasUsd.toFixed(4)}` : (
                           network === 'Polygon' ? '~$0.01' : 
                           network === 'Arbitrum' ? '~$0.50' : 
                           '~$15-50'
@@ -796,43 +837,50 @@ export default function Page() {
                   <div className="space-y-3">
                     <div>
                       <label className="text-sm font-medium text-green-800">Splitter Contract Address:</label>
-                      <div className="mt-1 p-2 bg-white rounded border font-mono text-sm">
-                        {deployResult.splitterAddress}
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="flex-1 p-2 bg-white rounded border font-mono text-sm">
+                          {deployResult}
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(deployResult)}
+                          className="px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors"
+                        >
+                          Copy
+                        </button>
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-green-700">Transaction:</span>
-                        <a 
-                          href={`https://${network.toLowerCase() === 'polygon' ? 'polygonscan' : network.toLowerCase() === 'arbitrum' ? 'arbiscan' : 'etherscan'}.io/tx/${deployResult.transactionHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-blue-600 hover:text-blue-800 underline ml-2"
-                        >
-                          View on Explorer
-                        </a>
-                      </div>
-                      <div>
-                        <span className="text-green-700">Gas Used:</span>
-                        <span className="font-medium ml-2">{deployResult.gasUsed}</span>
-                      </div>
-                      <div>
-                        <span className="text-green-700">Cost:</span>
-                        <span className="font-medium ml-2">{deployResult.gasCostEth} {network === 'Polygon' ? 'MATIC' : 'ETH'}</span>
-                      </div>
-                      <div>
-                        <span className="text-green-700">USD Cost:</span>
-                        <span className="font-medium ml-2">${deployResult.gasCostUsd}</span>
-                      </div>
+                    <div className="flex items-center gap-4">
+                      <a 
+                        href={`https://${network.toLowerCase() === 'polygon' ? 'polygonscan.com' : network.toLowerCase() === 'arbitrum' ? 'arbiscan.io' : 'etherscan.io'}/address/${deployResult}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        View on {network === 'Polygon' ? 'PolygonScan' : network === 'Arbitrum' ? 'Arbiscan' : 'Etherscan'}
+                      </a>
+                      
+                      <a 
+                        href="/manage"
+                        className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-50 transition-colors"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                        </svg>
+                        Manage Contracts
+                      </a>
                     </div>
 
                     <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                      <p className="text-sm text-blue-800 font-medium">Next Steps:</p>
+                      <p className="text-sm text-blue-800 font-medium">How to use your splitter:</p>
                       <ul className="text-sm text-blue-700 mt-1 space-y-1">
-                        <li>• Send {token} to the contract address to fund it</li>
+                        <li>• Send {token} to the contract address above</li>
+                        <li>• Funds are automatically split according to your percentages</li>
                         <li>• Recipients can claim their shares anytime</li>
-                        <li>• The contract is permanent and immutable</li>
+                        <li>• Use the Manage page to fund and release payments</li>
                       </ul>
                     </div>
                   </div>
@@ -842,7 +890,7 @@ export default function Page() {
 
             {/* Navigation and Deploy */}
             <div className="flex items-center justify-between pt-6">
-              <button 
+              <button
                 className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all flex items-center gap-2"
                 onClick={() => setStep(2)}
               >
