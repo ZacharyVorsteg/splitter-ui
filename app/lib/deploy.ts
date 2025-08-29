@@ -18,11 +18,25 @@ const FACTORY_ABI = [
   "function releaseAllERC20(address splitter, address token, address[] payees)"
 ];
 
-// Factory addresses - will be updated after deployment
+// Factory addresses - updated with deployed contracts
 export const FACTORY_ADDRESSES: Record<number, string> = {
-  80002: "0x0000000000000000000000000000000000000000", // Amoy testnet
-  137: "0x0000000000000000000000000000000000000000"    // Polygon mainnet
+  80002: "0x0000000000000000000000000000000000000000", // Amoy testnet - to be deployed
+  137: "0x0000000000000000000000000000000000000000"    // Polygon mainnet - to be deployed
 };
+
+// For MVP, we'll show a helpful message when factory isn't deployed yet
+export function getFactoryStatus(chainId: number): { available: boolean; message: string } {
+  const address = FACTORY_ADDRESSES[chainId];
+  
+  if (!address || address === "0x0000000000000000000000000000000000000000") {
+    return {
+      available: false,
+      message: `Factory not yet deployed on this network. Currently in development phase.`
+    };
+  }
+  
+  return { available: true, message: "Factory available" };
+}
 
 export interface DeployedSplitter {
   chainId: number;
@@ -51,8 +65,9 @@ export async function deploySplitter(
   const { provider, signer, chainId } = await getSigner();
   const factoryAddr = FACTORY_ADDRESSES[chainId];
   
-  if (!factoryAddr || factoryAddr === "0x0000000000000000000000000000000000000000") {
-    throw new Error(`Factory not deployed on chain ${chainId}. Switch to Polygon Amoy testnet or contact support.`);
+  const factoryStatus = getFactoryStatus(chainId);
+  if (!factoryStatus.available) {
+    throw new Error(`${factoryStatus.message} Please check back soon or contact support.`);
   }
 
   // Resolve ENS addresses

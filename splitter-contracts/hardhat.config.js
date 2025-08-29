@@ -7,12 +7,12 @@ export default {
   solidity: "0.8.20",
   networks: {
     amoy: {
-      url: `https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_KEY || 'demo'}`,
+      url: "https://rpc-amoy.polygon.technology",
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
       chainId: 80002
     },
     polygon: {
-      url: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY || 'demo'}`,
+      url: "https://polygon-rpc.com",
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
       chainId: 137
     }
