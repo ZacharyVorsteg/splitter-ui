@@ -3,6 +3,8 @@ import React, { useMemo, useRef, useState } from 'react';
 import Header from './components/Header';
 import NetworkStatus from './components/NetworkStatus';
 import { useLiveData } from './hooks/useLiveData';
+import { getContractDeployer, type SplitterConfig, type DeployResult } from './utils/contractDeploy';
+import { useAccount } from 'wagmi';
 
 type Recipient = { id: string; input: string; address: string | null; percent: string };
 type Step = 1 | 2 | 3;
@@ -25,7 +27,15 @@ export default function Page() {
   const [testAmount, setTestAmount] = useState<string>('1.00');
   
   // Use live data instead of static values
-  const { ethPrice, usdcPrice, gasData, calculateGasCost, refresh, getVolatilityLevel, isConnected } = useLiveData();
+  const { ethPrice, usdcPrice, maticPrice, gasData, calculateGasCost, refresh, getVolatilityLevel, isConnected } = useLiveData();
+  
+  // Wallet connection
+  const { address: connectedAddress, isConnected: walletConnected } = useAccount();
+  
+  // Deployment state
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deployResult, setDeployResult] = useState<DeployResult | null>(null);
+  const [deployError, setDeployError] = useState<string | null>(null);
 
   const parsedPercents = recipients.map(r => Number(r.percent || '0'));
   const sumPercent = parsedPercents.reduce((a, b) => a + (isFinite(b) ? b : 0), 0);
@@ -117,6 +127,48 @@ export default function Page() {
   // Get current price for calculations
   const currentPrice = token === 'ETH' ? ethPrice.usd : usdcPrice.usd;
 
+  // Deploy splitter contract
+  const deployContract = async () => {
+    if (!walletConnected) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    if (!sumOk) {
+      alert('Total percentage must equal 100% before deploying');
+      return;
+    }
+
+    try {
+      setIsDeploying(true);
+      setDeployError(null);
+
+      const config: SplitterConfig = {
+        name,
+        network,
+        token,
+        recipients: recipients.map(r => ({
+          address: r.input,
+          percent: Number(r.percent || '0'),
+          bps: toBps(Number(r.percent || '0'))
+        }))
+      };
+
+      const ethPriceForGas = ethPrice.usd || 4000; // Fallback price
+      const deployer = getContractDeployer();
+      const result = await deployer.deployFromConfig(config, ethPriceForGas);
+      
+      setDeployResult(result);
+      console.log('🎉 Splitter deployed successfully:', result);
+
+    } catch (error) {
+      console.error('❌ Deployment failed:', error);
+      setDeployError(error instanceof Error ? error.message : 'Deployment failed');
+    } finally {
+      setIsDeploying(false);
+    }
+  };
+
   return (
     <>
       <Header currentStep={step} totalSteps={3} />
@@ -134,7 +186,7 @@ export default function Page() {
             
             <div className="space-y-6">
               {/* Splitter Name */}
-              <div>
+            <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-900 mb-2">
                   Splitter Name
                   <span className="tooltip ml-1">
@@ -144,8 +196,8 @@ export default function Page() {
                     <span className="tooltip-text">Give your payment splitter a descriptive name</span>
                   </span>
                 </label>
-                <input
-                  id="name"
+              <input
+                id="name"
                   className={`w-full rounded-lg border px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 ${
                     name.trim().length >= 3 
                       ? 'border-gray-300 focus:ring-[#0052FF] focus:border-[#0052FF]' 
@@ -154,9 +206,9 @@ export default function Page() {
                         : 'border-gray-300 focus:ring-[#0052FF] focus:border-[#0052FF]'
                   }`}
                   placeholder="Q1 Revenue Share"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                />
+                value={name}
+                onChange={e => setName(e.target.value)}
+              />
                 <div className="mt-2 flex items-center justify-between">
                   <p className="text-xs text-gray-600">e.g., &lsquo;Q1 Revenue Share&rsquo; - This helps you identify your splitter</p>
                   {name.trim().length > 0 && name.trim().length < 3 && (
@@ -176,11 +228,11 @@ export default function Page() {
                     </p>
                   )}
                 </div>
-              </div>
+            </div>
 
               {/* Network and Token Selection */}
               <div className="grid gap-6 sm:grid-cols-2">
-                <div>
+              <div>
                   <label className="block text-sm font-medium text-gray-900 mb-2">
                     Network
                     <span className="tooltip ml-1">
@@ -190,15 +242,15 @@ export default function Page() {
                       <span className="tooltip-text">Choose blockchain network for deployment</span>
                     </span>
                   </label>
-                  <select
+                <select
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#0052FF] focus:border-[#0052FF]"
-                    value={network}
-                    onChange={e => setNetwork(e.target.value as 'Polygon' | 'Ethereum' | 'Arbitrum')}
-                  >
+                  value={network}
+                  onChange={e => setNetwork(e.target.value as 'Polygon' | 'Ethereum' | 'Arbitrum')}
+                >
                     <option value="Polygon">🟣 Polygon</option>
                     <option value="Ethereum">🔵 Ethereum</option>
                     <option value="Arbitrum">🔴 Arbitrum</option>
-                  </select>
+                </select>
                   <div className="mt-2 p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-600">Gas estimate:</span>
@@ -232,9 +284,9 @@ export default function Page() {
                       </p>
                     )}
                   </div>
-                </div>
+              </div>
 
-                <div>
+              <div>
                   <label className="block text-sm font-medium text-gray-900 mb-2">
                     Token
                     <span className="tooltip ml-1">
@@ -244,14 +296,14 @@ export default function Page() {
                       <span className="tooltip-text">Choose which token to split</span>
                     </span>
                   </label>
-                  <select
+                <select
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#0052FF] focus:border-[#0052FF]"
-                    value={token}
-                    onChange={e => setToken(e.target.value as 'ETH' | 'USDC')}
-                  >
+                  value={token}
+                  onChange={e => setToken(e.target.value as 'ETH' | 'USDC')}
+                >
                     <option value="ETH">💎 ETH</option>
                     <option value="USDC">💵 USDC</option>
-                  </select>
+                </select>
                   <div className="mt-2 p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-600">Current price:</span>
@@ -380,18 +432,18 @@ export default function Page() {
                     Total exceeds 100%. Please adjust your percentages.
                   </p>
                 )}
-              </div>
+            </div>
 
               {/* Recipients List */}
               <div className="space-y-4">
-                {recipients.map((r, i) => {
-                  const { hint } = normalizeAddressOrENS(r.input);
-                  const keyLower = (r.address || r.input.trim()).toLowerCase();
-                  const isDup = keyLower && duplicateAddresses.has(keyLower);
-                  const pct = Number(r.percent || '0');
-                  const pctValid = isFinite(pct) && pct >= 0 && pct <= 100;
+                  {recipients.map((r, i) => {
+                    const { hint } = normalizeAddressOrENS(r.input);
+                    const keyLower = (r.address || r.input.trim()).toLowerCase();
+                    const isDup = keyLower && duplicateAddresses.has(keyLower);
+                    const pct = Number(r.percent || '0');
+                    const pctValid = isFinite(pct) && pct >= 0 && pct <= 100;
 
-                  return (
+                    return (
                     <div key={r.id} className="bg-gray-50 rounded-lg p-4 animate-slide-up">
                       <div className="flex items-start gap-4">
                         <div className="flex-1">
@@ -478,8 +530,8 @@ export default function Page() {
                         </div>
                       </div>
                     </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
 
               {/* Add Recipient Button */}
@@ -501,7 +553,7 @@ export default function Page() {
               <div className="mb-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Test Your Configuration</h3>
                 <p className="text-sm text-gray-600">Enter a test amount to see how funds would be distributed to each recipient</p>
-              </div>
+                </div>
 
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-900 mb-2">
@@ -620,86 +672,250 @@ export default function Page() {
         )}
 
         {step === 3 && (
-          <section className="space-y-6">
-            <h2 className="text-lg font-medium">Review & Export Configuration</h2>
-            <div className="rounded-lg border p-4">
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div>
-                  <dt className="text-xs text-gray-500">Name</dt>
-                  <dd className="font-medium">{name}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-gray-500">Network</dt>
-                  <dd className="font-medium">{network}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-gray-500">Token</dt>
-                  <dd className="font-medium">{token}</dd>
-                </div>
-              </dl>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium">Recipient</th>
-                      <th className="px-3 py-2 text-left font-medium">% Share</th>
-                      <th className="px-3 py-2 text-left font-medium">BPS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recipients.map(r => {
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm animate-slide-up">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Deploy Your Payment Splitter</h2>
+              
+              {/* Configuration Summary */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                <h3 className="text-sm font-medium text-gray-900 mb-3">Configuration Summary</h3>
+                <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <dt className="text-xs text-gray-500">Name</dt>
+                    <dd className="font-medium">{name}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-500">Network</dt>
+                    <dd className="font-medium">{network}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-500">Token</dt>
+                    <dd className="font-medium">{token}</dd>
+                  </div>
+                </dl>
+                
+                <div className="mt-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Recipients ({recipients.length})</h4>
+                  <div className="space-y-2">
+                    {recipients.map((r, i) => {
                       const pct = Number(r.percent || '0');
                       return (
-                        <tr key={r.id} className="border-t">
-                          <td className="px-3 py-2">{r.input || '—'}</td>
-                          <td className="px-3 py-2">{toFixed2(pct)}%</td>
-                          <td className="px-3 py-2">{toBps(pct)} bps</td>
-                        </tr>
+                        <div key={r.id} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700">{r.input || `Recipient ${i + 1}`}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{toFixed2(pct)}%</span>
+                            <span className="text-gray-500">({toBps(pct)} bps)</span>
+                          </div>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
               </div>
 
-              <p className="mt-3 text-xs text-gray-600">
-                You will deploy a minimal proxy pointing to a verified PaymentSplitter implementation. Keep your config.json for audit.
-              </p>
+              {/* Wallet Connection Status */}
+              {!walletConnected ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-blue-800">Wallet Required</p>
+                      <p className="text-sm text-blue-700">Connect your wallet to deploy the smart contract</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-green-800">Wallet Connected</p>
+                      <p className="text-sm text-green-700">Ready to deploy to {network}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Deployment Cost Estimate */}
+              {walletConnected && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                  <h3 className="text-sm font-medium text-yellow-800 mb-2">Estimated Deployment Cost</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-yellow-700">Gas Estimate:</span>
+                      <span className="font-medium ml-2">~150,000 gas</span>
+                    </div>
+                    <div>
+                      <span className="text-yellow-700">Network Fee:</span>
+                      <span className="font-medium ml-2">
+                        {gasData.standard && currentPrice ? (
+                          `~$${((150000 * gasData.standard * 1e-9) * currentPrice).toFixed(4)}`
+                        ) : (
+                          network === 'Polygon' ? '~$0.01' : 
+                          network === 'Arbitrum' ? '~$0.50' : 
+                          '~$15-50'
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-yellow-700 mt-2">
+                    Actual cost depends on network congestion. This creates a permanent, immutable contract.
+                  </p>
+                </div>
+              )}
+
+              {/* Error State */}
+              {deployError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-5 w-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-red-800">Deployment Failed</p>
+                      <p className="text-sm text-red-700">{deployError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Success State */}
+              {deployResult && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <svg className="h-6 w-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <h3 className="text-lg font-semibold text-green-800">Contract Deployed Successfully!</h3>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-green-800">Splitter Contract Address:</label>
+                      <div className="mt-1 p-2 bg-white rounded border font-mono text-sm">
+                        {deployResult.splitterAddress}
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-green-700">Transaction:</span>
+                        <a 
+                          href={`https://${network.toLowerCase() === 'polygon' ? 'polygonscan' : network.toLowerCase() === 'arbitrum' ? 'arbiscan' : 'etherscan'}.io/tx/${deployResult.transactionHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-blue-600 hover:text-blue-800 underline ml-2"
+                        >
+                          View on Explorer
+                        </a>
+                      </div>
+                      <div>
+                        <span className="text-green-700">Gas Used:</span>
+                        <span className="font-medium ml-2">{deployResult.gasUsed}</span>
+                      </div>
+                      <div>
+                        <span className="text-green-700">Cost:</span>
+                        <span className="font-medium ml-2">{deployResult.gasCostEth} {network === 'Polygon' ? 'MATIC' : 'ETH'}</span>
+                      </div>
+                      <div>
+                        <span className="text-green-700">USD Cost:</span>
+                        <span className="font-medium ml-2">${deployResult.gasCostUsd}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-800 font-medium">Next Steps:</p>
+                      <ul className="text-sm text-blue-700 mt-1 space-y-1">
+                        <li>• Send {token} to the contract address to fund it</li>
+                        <li>• Recipients can claim their shares anytime</li>
+                        <li>• The contract is permanent and immutable</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center justify-between">
-              <button className="rounded-md border px-4 py-2 text-sm" onClick={() => setStep(2)}>Back</button>
-              <button
-                className="rounded-md bg-black px-4 py-2 text-sm text-white"
-                onClick={() => {
-                  const config = {
-                    name,
-                    network,
-                    token,
-                    recipients: recipients.map(r => ({
-                      address: r.input,
-                      percent: Number(r.percent || '0'),
-                      bps: toBps(Number(r.percent || '0'))
-                    }))
-                  };
-                  
-                  const configJson = JSON.stringify(config, null, 2);
-                  const blob = new Blob([configJson], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `${name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-config.json`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                  
-                  alert(`Configuration saved! This is currently a configuration tool. Your ${name} split configuration has been downloaded as a JSON file. To deploy an actual smart contract, you'll need to use this configuration with a contract deployment service or implement the smart contract functionality.`);
-                }}
+            {/* Navigation and Deploy */}
+            <div className="flex items-center justify-between pt-6">
+              <button 
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all flex items-center gap-2"
+                onClick={() => setStep(2)}
               >
-                Download Config
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Back to Recipients
               </button>
+              
+              <div className="flex items-center gap-3">
+                {/* Download Config Button (Secondary) */}
+                <button
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-2"
+                  onClick={() => {
+                    const config = {
+                      name,
+                      network,
+                      token,
+                      recipients: recipients.map(r => ({
+                        address: r.input,
+                        percent: Number(r.percent || '0'),
+                        bps: toBps(Number(r.percent || '0'))
+                      }))
+                    };
+                    
+                    const configJson = JSON.stringify(config, null, 2);
+                    const blob = new Blob([configJson], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-config.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download Config
+                </button>
+
+                {/* Deploy Contract Button (Primary) */}
+                <button
+                  disabled={!walletConnected || isDeploying || !sumOk}
+                  className={`rounded-lg px-6 py-3 text-sm font-medium transition-all flex items-center gap-2 shadow-sm ${
+                    walletConnected && !isDeploying && sumOk
+                      ? 'bg-[#0052FF] text-white hover:bg-[#0041CC] hover:shadow-md' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                  onClick={deployContract}
+                >
+                  {isDeploying ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Deploying Contract...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Deploy Smart Contract
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-          </section>
+          </div>
         )}
 
         <footer className="mt-12 border-t pt-6 space-y-4">
