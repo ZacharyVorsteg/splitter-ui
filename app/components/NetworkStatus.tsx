@@ -112,7 +112,15 @@ export default function NetworkStatus({ ethPrice, gasData, networkName, onRefres
           <div className="text-xs text-gray-500">
             Updated {getTimeAgo(ethPrice.lastUpdated)}
             {ethPrice.source && (
-              <span className="ml-1">via {ethPrice.source}</span>
+              <span className="ml-1 flex items-center gap-1">
+                via {ethPrice.source}
+                {ethPrice.source === 'Binance WebSocket' && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-medium">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                    LIVE
+                  </span>
+                )}
+              </span>
             )}
           </div>
           

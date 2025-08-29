@@ -82,86 +82,119 @@ export const useLiveData = () => {
     isHealthy: true,
   });
 
-  // Fetch ETH price from CoinGecko with fallback to CoinMarketCap
+  // Fetch ETH price from multiple sources with validation
   const fetchEthPrice = useCallback(async () => {
     try {
       setEthPrice(prev => ({ ...prev, isLoading: true, error: null }));
 
-      // Primary: CoinGecko
-      const response = await fetch(
-        'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_high_low_24h=true',
-        { 
-          headers: { 'Accept': 'application/json' },
-          // Add timeout
-          signal: AbortSignal.timeout(5000)
+      // Try multiple sources in parallel for validation
+      const sources = [
+        {
+          name: 'CoinGecko',
+          url: 'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&include_24hr_change=true&include_high_low_24h=true',
+          parser: (data: { ethereum?: { usd?: number; usd_24h_change?: number; usd_24h_high?: number; usd_24h_low?: number } }) => ({
+            price: data.ethereum?.usd,
+            change24h: data.ethereum?.usd_24h_change,
+            high24h: data.ethereum?.usd_24h_high,
+            low24h: data.ethereum?.usd_24h_low
+          })
+        },
+        {
+          name: 'Binance',
+          url: 'https://api.binance.com/api/v3/ticker/24hr?symbol=ETHUSDT',
+          parser: (data: { lastPrice?: string; priceChangePercent?: string; highPrice?: string; lowPrice?: string }) => ({
+            price: parseFloat(data.lastPrice || '0'),
+            change24h: parseFloat(data.priceChangePercent || '0'),
+            high24h: parseFloat(data.highPrice || '0'),
+            low24h: parseFloat(data.lowPrice || '0')
+          })
+        },
+        {
+          name: 'CoinCap',
+          url: 'https://api.coincap.io/v2/assets/ethereum',
+          parser: (data: { data?: { priceUsd?: string; changePercent24Hr?: string } }) => ({
+            price: parseFloat(data.data?.priceUsd || '0'),
+            change24h: parseFloat(data.data?.changePercent24Hr || '0'),
+            high24h: null,
+            low24h: null
+          })
         }
+      ];
+
+      const results = await Promise.allSettled(
+        sources.map(async (source) => {
+          const response = await fetch(source.url, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(8000)
+          });
+          
+          if (!response.ok) {
+            throw new Error(`${source.name} API error: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          const parsed = source.parser(data);
+          
+          // Sanity check: ETH should be between $1000 and $10000
+          if (!parsed.price || parsed.price < 1000 || parsed.price > 10000) {
+            throw new Error(`${source.name} returned invalid price: ${parsed.price}`);
+          }
+          
+          return {
+            ...parsed,
+            source: source.name
+          };
+        })
       );
 
-      if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.status}`);
+      // Find successful results
+      const successfulResults = results
+        .filter((result) => result.status === 'fulfilled')
+        .map(result => (result as PromiseFulfilledResult<{ price: number; change24h: number; high24h: number | null; low24h: number | null; source: string }>).value);
+
+      if (successfulResults.length === 0) {
+        throw new Error('All price sources failed');
       }
 
-      const data = await response.json();
-      const ethData = data.ethereum;
-
-      if (!ethData || !ethData.usd) {
-        throw new Error('Invalid price data from CoinGecko');
+      // Use the first successful result, but log if there are major discrepancies
+      const primaryResult = successfulResults[0];
+      
+      // Check for price discrepancies between sources (> 5% difference is suspicious)
+      if (successfulResults.length > 1) {
+        const prices = successfulResults.map(r => r.price);
+        const maxPrice = Math.max(...prices);
+        const minPrice = Math.min(...prices);
+        const discrepancy = ((maxPrice - minPrice) / minPrice) * 100;
+        
+        if (discrepancy > 5) {
+          console.warn(`Large price discrepancy detected: ${discrepancy.toFixed(2)}%`, {
+            prices: successfulResults.map(r => ({ source: r.source, price: r.price }))
+          });
+        }
       }
+
+      console.log(`ETH price fetched: $${primaryResult.price} from ${primaryResult.source}`);
 
       setEthPrice({
-        usd: ethData.usd,
-        change24h: ethData.usd_24h_change || 0,
-        high24h: ethData.usd_24h_high || ethData.usd,
-        low24h: ethData.usd_24h_low || ethData.usd,
+        usd: primaryResult.price,
+        change24h: primaryResult.change24h || 0,
+        high24h: primaryResult.high24h || primaryResult.price,
+        low24h: primaryResult.low24h || primaryResult.price,
         lastUpdated: Date.now(),
-        source: 'CoinGecko',
+        source: primaryResult.source,
         isStale: false,
         isLoading: false,
         error: null,
       });
 
     } catch (error) {
-      console.warn('CoinGecko failed, trying fallback...', error);
-      
-      try {
-        // Fallback: Alternative API (we'll use a simple public API)
-        const fallbackResponse = await fetch(
-          'https://api.coinbase.com/v2/exchange-rates?currency=ETH',
-          { signal: AbortSignal.timeout(5000) }
-        );
-
-        if (!fallbackResponse.ok) {
-          throw new Error('Fallback API also failed');
-        }
-
-        const fallbackData = await fallbackResponse.json();
-        const usdRate = parseFloat(fallbackData.data.rates.USD);
-
-        if (!usdRate || isNaN(usdRate)) {
-          throw new Error('Invalid fallback price data');
-        }
-
-        setEthPrice({
-          usd: usdRate,
-          change24h: null, // Fallback doesn't have change data
-          high24h: null,
-          low24h: null,
-          lastUpdated: Date.now(),
-          source: 'Coinbase',
-          isStale: false,
-          isLoading: false,
-          error: null,
-        });
-
-      } catch (fallbackError) {
-        console.error('All price feeds failed:', fallbackError);
-        setEthPrice(prev => ({
-          ...prev,
-          isLoading: false,
-          error: 'Unable to fetch current ETH price. All price feeds are unavailable.',
-          isStale: true,
-        }));
-      }
+      console.error('All price sources failed:', error);
+      setEthPrice(prev => ({
+        ...prev,
+        isLoading: false,
+        error: `Unable to fetch current ETH price: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        isStale: true,
+      }));
     }
   }, []);
 
@@ -233,19 +266,102 @@ export const useLiveData = () => {
     }));
   }, []);
 
-  // Initialize and set up polling
+  // Initialize and set up real-time connections
   useEffect(() => {
     // Initial fetch
     fetchEthPrice();
     fetchGasData();
 
-    // Set up polling intervals
-    const priceInterval = setInterval(fetchEthPrice, PRICE_POLL_INTERVAL);
+    // Try WebSocket for real-time data first, fallback to polling
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let priceInterval: NodeJS.Timeout | null = null;
+    
+    const connectWebSocket = () => {
+      try {
+        // Use Binance WebSocket for real-time ETH price
+        ws = new WebSocket('wss://stream.binance.com:9443/ws/ethusdt@ticker');
+        
+        ws.onopen = () => {
+          console.log('WebSocket connected for real-time ETH prices');
+          // Clear polling interval since we have WebSocket
+          if (priceInterval) {
+            clearInterval(priceInterval);
+            priceInterval = null;
+          }
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const price = parseFloat(data.c); // Current price
+            const change24h = parseFloat(data.P); // 24h change percentage
+            const high24h = parseFloat(data.h); // 24h high
+            const low24h = parseFloat(data.l); // 24h low
+            
+            // Sanity check
+            if (price > 1000 && price < 10000) {
+              setEthPrice({
+                usd: price,
+                change24h: change24h,
+                high24h: high24h,
+                low24h: low24h,
+                lastUpdated: Date.now(),
+                source: 'Binance WebSocket',
+                isStale: false,
+                isLoading: false,
+                error: null,
+              });
+            }
+          } catch (error) {
+            console.warn('WebSocket message parsing error:', error);
+          }
+        };
+        
+        ws.onerror = (error) => {
+          console.warn('WebSocket error:', error);
+        };
+        
+        ws.onclose = () => {
+          console.log('WebSocket closed, falling back to polling...');
+          ws = null;
+          
+          // Fallback to polling
+          if (!priceInterval) {
+            priceInterval = setInterval(fetchEthPrice, PRICE_POLL_INTERVAL);
+          }
+          
+          // Try to reconnect WebSocket after 10 seconds
+          reconnectTimeout = setTimeout(connectWebSocket, 10000);
+        };
+        
+      } catch (error) {
+        console.warn('WebSocket connection failed, using polling:', error);
+        // Start polling immediately if WebSocket fails
+        if (!priceInterval) {
+          priceInterval = setInterval(fetchEthPrice, PRICE_POLL_INTERVAL);
+        }
+      }
+    };
+
+    // Try WebSocket first
+    connectWebSocket();
+
+    // Always set up gas polling (no reliable WebSocket for gas prices)
     const gasInterval = setInterval(fetchGasData, GAS_POLL_INTERVAL);
-    const stalenessInterval = setInterval(checkStaleness, 5000); // Check staleness every 5s
+    const stalenessInterval = setInterval(checkStaleness, 5000);
 
     return () => {
-      clearInterval(priceInterval);
+      // Cleanup
+      if (ws) {
+        ws.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (priceInterval) {
+        clearInterval(priceInterval);
+      }
       clearInterval(gasInterval);
       clearInterval(stalenessInterval);
     };
