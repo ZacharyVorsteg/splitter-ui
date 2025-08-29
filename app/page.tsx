@@ -112,181 +112,159 @@ export default function Page() {
 
   return (
     <>
-      <Header />
-      <main>
-        <section className="mb-6">
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 mb-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-blue-800">
-                  🛠️ Configuration Tool - Safe & Transparent
-                </h3>
-                <div className="mt-2 text-sm text-blue-700">
-                  <p>
-                    This tool helps you plan and configure payment splits for {token} on {network}. 
-                    It generates a configuration file that can be used with smart contract deployment services. 
-                    <strong className="font-medium"> This does not deploy contracts directly - your funds are safe.</strong>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-            <svg className="h-4 w-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <span>Plan how to route incoming {token} on {network} to teammates by fixed percentages</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <svg className="h-4 w-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <span>Always test with small amounts first when implementing contracts</span>
-          </div>
-        </section>
-
-        <ol className="mb-6 flex items-center gap-3 text-sm">
-          <li className={`rounded-full px-3 py-1 ${step === 1 ? 'bg-black text-white' : 'bg-gray-100'}`}>1. Basics</li>
-          <li className={`rounded-full px-3 py-1 ${step === 2 ? 'bg-black text-white' : 'bg-gray-100'}`}>2. Recipients</li>
-          <li className={`rounded-full px-3 py-1 ${step === 3 ? 'bg-black text-white' : 'bg-gray-100'}`}>3. Review & Export</li>
-        </ol>
+      <Header currentStep={step} totalSteps={3} />
+      <main className="space-y-6">
 
         {step === 1 && (
-          <section className="space-y-6">
-            <div>
-              <label htmlFor="name" className="flex items-center gap-2 text-sm font-medium">
-                Splitter name
-                <div className="group relative">
-                  <svg className="h-4 w-4 text-gray-400 cursor-help" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                  </svg>
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                    Give your payment splitter a descriptive name
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm animate-slide-up">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Configure Your Payment Splitter</h2>
+            
+            <div className="space-y-6">
+              {/* Splitter Name */}
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-900 mb-2">
+                  Splitter Name
+                  <span className="tooltip ml-1">
+                    <svg className="h-4 w-4 text-[#0052FF] cursor-help inline" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                    </svg>
+                    <span className="tooltip-text">Give your payment splitter a descriptive name</span>
+                  </span>
+                </label>
+                <input
+                  id="name"
+                  className={`w-full rounded-lg border px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 ${
+                    name.trim().length >= 3 
+                      ? 'border-gray-300 focus:ring-[#0052FF] focus:border-[#0052FF]' 
+                      : name.trim().length > 0 
+                        ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                        : 'border-gray-300 focus:ring-[#0052FF] focus:border-[#0052FF]'
+                  }`}
+                  placeholder="Q1 Revenue Share"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                />
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-xs text-gray-600">e.g., &lsquo;Q1 Revenue Share&rsquo; - This helps you identify your splitter</p>
+                  {name.trim().length > 0 && name.trim().length < 3 && (
+                    <p className="text-xs text-red-600 flex items-center gap-1">
+                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      Minimum 3 characters required
+                    </p>
+                  )}
+                  {name.trim().length >= 3 && (
+                    <p className="text-xs text-green-600 flex items-center gap-1 animate-fade-in">
+                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      Looks good!
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Network and Token Selection */}
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Network
+                    <span className="tooltip ml-1">
+                      <svg className="h-4 w-4 text-[#0052FF] cursor-help inline" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                      </svg>
+                      <span className="tooltip-text">Choose blockchain network for deployment</span>
+                    </span>
+                  </label>
+                  <select
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#0052FF] focus:border-[#0052FF]"
+                    value={network}
+                    onChange={e => setNetwork(e.target.value as 'Polygon' | 'Ethereum' | 'Arbitrum')}
+                  >
+                    <option value="Polygon">🟣 Polygon</option>
+                    <option value="Ethereum">🔵 Ethereum</option>
+                    <option value="Arbitrum">🔴 Arbitrum</option>
+                  </select>
+                  <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-600">Gas estimate:</span>
+                      <span className="font-medium text-gray-900">
+                        {network === 'Polygon' && '~$0.01'}
+                        {network === 'Ethereum' && '~$15-50'}
+                        {network === 'Arbitrum' && '~$0.50'}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-600">
+                      {network === 'Polygon' && 'Low fees, fast transactions. Great for frequent splits.'}
+                      {network === 'Ethereum' && 'Most secure and decentralized, but higher fees.'}
+                      {network === 'Arbitrum' && 'Layer 2 solution with lower fees than Ethereum.'}
+                    </p>
                   </div>
                 </div>
-              </label>
-              <input
-                id="name"
-                className={`mt-1 w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 ${
-                  name.trim().length >= 3 
-                    ? 'border-gray-300 focus:ring-black' 
-                    : name.trim().length > 0 
-                      ? 'border-red-300 focus:ring-red-500' 
-                      : 'border-gray-300 focus:ring-black'
-                }`}
-                placeholder="Design Team Splitter"
-                value={name}
-                onChange={e => setName(e.target.value)}
-              />
-              <div className="mt-1 flex items-center justify-between">
-                <p className="text-xs text-gray-500">Shown on the dashboard & receipts.</p>
-                {name.trim().length > 0 && name.trim().length < 3 && (
-                  <p className="text-xs text-red-600">Minimum 3 characters required</p>
-                )}
-                {name.trim().length >= 3 && (
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Good
-                  </p>
-                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Token
+                    <span className="tooltip ml-1">
+                      <svg className="h-4 w-4 text-[#0052FF] cursor-help inline" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                      </svg>
+                      <span className="tooltip-text">Choose which token to split</span>
+                    </span>
+                  </label>
+                  <select
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#0052FF] focus:border-[#0052FF]"
+                    value={token}
+                    onChange={e => setToken(e.target.value as 'ETH' | 'USDC')}
+                  >
+                    <option value="ETH">💎 ETH</option>
+                    <option value="USDC">💵 USDC</option>
+                  </select>
+                  <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-600">Current price:</span>
+                      <span className="font-medium text-gray-900">
+                        {token === 'ETH' && '$3,200'}
+                        {token === 'USDC' && '$1.00'}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-600">
+                      {token === 'ETH' && 'Native token, widely accepted across DeFi.'}
+                      {token === 'USDC' && 'Stable value pegged to USD, great for predictable splits.'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium">
-                  Network
-                  <div className="group relative">
-                    <svg className="h-4 w-4 text-gray-400 cursor-help" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                    </svg>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                      Choose blockchain network for deployment
-                    </div>
-                  </div>
-                </label>
-                <select
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
-                  value={network}
-                  onChange={e => setNetwork(e.target.value as 'Polygon' | 'Ethereum' | 'Arbitrum')}
-                >
-                  <option value="Polygon">🟣 Polygon (Low fees, fast)</option>
-                  <option value="Ethereum">🔵 Ethereum (Most secure)</option>
-                  <option value="Arbitrum">🔴 Arbitrum (L2, lower fees)</option>
-                </select>
-                <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
-                  <svg className="h-3 w-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  {network === 'Polygon' && 'Great choice! Low fees and fast transactions.'}
-                  {network === 'Ethereum' && 'Most secure option, but higher gas fees.'}
-                  {network === 'Arbitrum' && 'Layer 2 solution with lower fees.'}
-                </p>
-              </div>
-
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium">
-                  Token
-                  <div className="group relative">
-                    <svg className="h-4 w-4 text-gray-400 cursor-help" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                    </svg>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                      Choose which token to split
-                    </div>
-                  </div>
-                </label>
-                <select
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
-                  value={token}
-                  onChange={e => setToken(e.target.value as 'ETH' | 'USDC')}
-                >
-                  <option value="ETH">💎 ETH (Native token)</option>
-                  <option value="USDC">💵 USDC (Stablecoin)</option>
-                </select>
-                <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
-                  <svg className="h-3 w-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  {token === 'ETH' && 'Native token, widely accepted.'}
-                  {token === 'USDC' && 'Stable value, pegged to USD.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
               <button
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all flex items-center gap-2"
                 onClick={() => handleCSVImport('0x0000000000000000000000000000000000000001,50\n0x0000000000000000000000000000000000000002,50')}
               >
                 <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Try sample recipients
+                Try Sample Data
               </button>
               <button
                 disabled={!canNextFromStep1()}
-                className={`rounded-md px-6 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                className={`rounded-lg px-6 py-3 text-sm font-medium transition-all flex items-center gap-2 shadow-sm ${
                   canNextFromStep1() 
-                    ? 'bg-black text-white hover:bg-gray-800' 
+                    ? 'bg-[#0052FF] text-white hover:bg-[#0041CC] hover:shadow-md' 
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
                 onClick={() => setStep(2)}
               >
-                Next
+                Continue to Recipients
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
             </div>
-          </section>
+          </div>
         )}
 
         {step === 2 && (
