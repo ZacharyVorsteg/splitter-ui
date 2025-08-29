@@ -1,6 +1,8 @@
 'use client';
 import React, { useMemo, useRef, useState } from 'react';
 import Header from './components/Header';
+import NetworkStatus from './components/NetworkStatus';
+import { useLiveData } from './hooks/useLiveData';
 
 type Recipient = { id: string; input: string; address: string | null; percent: string };
 type Step = 1 | 2 | 3;
@@ -21,7 +23,9 @@ export default function Page() {
     { id: uid(), input: '', address: null, percent: '' },
   ]);
   const [testAmount, setTestAmount] = useState<string>('1.00');
-  const [usdPrice] = useState<number | null>(3200);
+  
+  // Use live data instead of static values
+  const { ethPrice, usdcPrice, gasData, calculateGasCost, refresh, getVolatilityLevel, isConnected } = useLiveData();
 
   const parsedPercents = recipients.map(r => Number(r.percent || '0'));
   const sumPercent = parsedPercents.reduce((a, b) => a + (isFinite(b) ? b : 0), 0);
@@ -110,9 +114,18 @@ export default function Page() {
     </span>
   );
 
+  // Get current price for calculations
+  const currentPrice = token === 'ETH' ? ethPrice.usd : usdcPrice.usd;
+
   return (
     <>
       <Header currentStep={step} totalSteps={3} />
+      <NetworkStatus 
+        ethPrice={ethPrice}
+        gasData={gasData}
+        networkName={network}
+        onRefresh={refresh}
+      />
       <main className="space-y-6">
 
         {step === 1 && (
@@ -189,17 +202,35 @@ export default function Page() {
                   <div className="mt-2 p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-600">Gas estimate:</span>
-                      <span className="font-medium text-gray-900">
-                        {network === 'Polygon' && '~$0.01'}
-                        {network === 'Ethereum' && '~$15-50'}
-                        {network === 'Arbitrum' && '~$0.50'}
-                      </span>
+                      <div className="text-right">
+                        {network === 'Ethereum' && gasData.standard && !gasData.isStale ? (
+                          <div>
+                            <span className="font-medium text-gray-900">
+                              ${calculateGasCost(150000, 'standard')?.usd.toFixed(2)} (Standard)
+                            </span>
+                            <div className="text-xs text-gray-500">
+                              ${calculateGasCost(150000, 'fast')?.usd.toFixed(2)} (Fast)
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="font-medium text-gray-900">
+                            {network === 'Polygon' && '~$0.01'}
+                            {network === 'Ethereum' && gasData.isStale ? '~$15-50' : 'Loading...'}
+                            {network === 'Arbitrum' && '~$0.50'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <p className="mt-1 text-xs text-gray-600">
                       {network === 'Polygon' && 'Low fees, fast transactions. Great for frequent splits.'}
                       {network === 'Ethereum' && 'Most secure and decentralized, but higher fees.'}
                       {network === 'Arbitrum' && 'Layer 2 solution with lower fees than Ethereum.'}
                     </p>
+                    {network === 'Ethereum' && gasData.isStale && (
+                      <p className="mt-1 text-xs text-amber-600">
+                        ⚠️ Gas estimates may be outdated
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -224,15 +255,47 @@ export default function Page() {
                   <div className="mt-2 p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-600">Current price:</span>
-                      <span className="font-medium text-gray-900">
-                        {token === 'ETH' && '$3,200'}
-                        {token === 'USDC' && '$1.00'}
-                      </span>
+                      <div className="text-right">
+                        {token === 'ETH' ? (
+                          ethPrice.isLoading ? (
+                            <div className="animate-pulse bg-gray-200 h-4 w-16 rounded"></div>
+                          ) : ethPrice.error ? (
+                            <span className="text-red-600">Error</span>
+                          ) : ethPrice.usd ? (
+                            <div>
+                              <span className="font-medium text-gray-900">
+                                ${ethPrice.usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                              {ethPrice.change24h && (
+                                <div className={`text-xs ${ethPrice.change24h > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {ethPrice.change24h > 0 ? '↑' : '↓'}{Math.abs(ethPrice.change24h).toFixed(1)}%
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-500">Loading...</span>
+                          )
+                        ) : (
+                          <span className="font-medium text-gray-900">$1.00</span>
+                        )}
+                      </div>
                     </div>
-                    <p className="mt-1 text-xs text-gray-600">
-                      {token === 'ETH' && 'Native token, widely accepted across DeFi.'}
-                      {token === 'USDC' && 'Stable value pegged to USD, great for predictable splits.'}
-                    </p>
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-xs text-gray-600">
+                        {token === 'ETH' && 'Native token, widely accepted across DeFi.'}
+                        {token === 'USDC' && 'Stable value pegged to USD, great for predictable splits.'}
+                      </p>
+                      {token === 'ETH' && ethPrice.lastUpdated && (
+                        <span className="text-xs text-gray-500">
+                          Updated {Math.floor((Date.now() - ethPrice.lastUpdated) / 1000)}s ago
+                        </span>
+                      )}
+                    </div>
+                    {token === 'ETH' && ethPrice.isStale && (
+                      <p className="mt-1 text-xs text-amber-600">
+                        ⚠️ Price data may be outdated
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -447,9 +510,15 @@ export default function Page() {
                     {token}
                   </div>
                 </div>
-                {usdPrice && testAmountNum > 0 && (
+                {currentPrice && testAmountNum > 0 && (
                   <p className="mt-2 text-sm text-gray-600 text-center">
-                    ≈ ${toFixed2(testAmountNum * usdPrice)} USD
+                    ≈ ${toFixed2(testAmountNum * currentPrice)} USD
+                    {token === 'ETH' && ethPrice.change24h && Math.abs(ethPrice.change24h) > 2 && (
+                      <span className="block text-xs text-amber-600 mt-1">
+                        ±${toFixed2(testAmountNum * currentPrice * Math.abs(ethPrice.change24h) / 100)} 
+                        ({Math.abs(ethPrice.change24h).toFixed(1)}% volatility)
+                      </span>
+                    )}
                   </p>
                 )}
               </div>
@@ -490,9 +559,12 @@ export default function Page() {
                           <div className="font-semibold text-gray-900">
                             {toFixed2(p.amount)} {token}
                           </div>
-                          {usdPrice && (
+                          {currentPrice && (
                             <div className="text-xs text-gray-500">
-                              ${toFixed2(p.amount * usdPrice)} USD
+                              ${toFixed2(p.amount * currentPrice)} USD
+                              {token === 'ETH' && ethPrice.isStale && (
+                                <span className="text-amber-600 ml-1">*</span>
+                              )}
                             </div>
                           )}
                         </div>

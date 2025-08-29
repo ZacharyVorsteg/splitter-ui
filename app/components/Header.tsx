@@ -19,8 +19,12 @@ export default function Header({ currentStep = 1, totalSteps = 3 }: HeaderProps)
             <span className="text-green-800 font-medium">Audited Contract ✓</span>
             <a href="#" className="text-green-600 hover:text-green-800 underline ml-1">View Report</a>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-gray-200 text-sm">
-            <span className="text-gray-600">1,247 successful splits processed</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-blue-200 text-sm">
+            <svg className="h-4 w-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+            <span className="text-blue-800 font-medium">Configuration Tool</span>
+            <a href="#" className="text-blue-600 hover:text-blue-800 underline ml-1">How it works</a>
           </div>
         </div>
         <ConnectButton />
