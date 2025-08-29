@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const config = getDefaultConfig({
   appName: 'Payment Splitter',
-  projectId: 'demo-project-id', // replace with WalletConnect projectId later
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo-project-id',
   chains: [polygon, arbitrum, mainnet],
   ssr: true,
 });
