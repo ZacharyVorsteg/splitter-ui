@@ -63,6 +63,18 @@ export const useLiveData = () => {
     error: null,
   });
 
+  const [maticPrice, setMaticPrice] = useState<PriceData>({
+    usd: null,
+    change24h: null,
+    high24h: null,
+    low24h: null,
+    lastUpdated: null,
+    source: null,
+    isStale: false,
+    isLoading: true,
+    error: null,
+  });
+
   const [gasData, setGasData] = useState<GasData>({
     standard: null,
     fast: null,
@@ -93,11 +105,11 @@ export const useLiveData = () => {
       ws.onopen = () => {
         console.log('✅ Coinbase WebSocket connected');
         
-        // Subscribe to ETH-USD ticker for real-time updates
+        // Subscribe to both ETH-USD and MATIC-USD for complete price coverage
         ws?.send(JSON.stringify({
           type: 'subscribe',
           channel: 'ticker',
-          product_ids: ['ETH-USD']
+          product_ids: ['ETH-USD', 'MATIC-USD']
         }));
         
         setEthPrice(prev => ({
@@ -115,10 +127,11 @@ export const useLiveData = () => {
           if (msg.channel === 'ticker' && msg.events) {
             for (const ev of msg.events) {
               for (const ticker of (ev.tickers || [])) {
+                const newPrice = parseFloat(ticker.price);
+                
+                // Handle ETH-USD updates
                 if (ticker.product_id === 'ETH-USD' && ticker.price) {
-                  const newPrice = parseFloat(ticker.price);
-                  
-                  // Sanity check
+                  // Sanity check for ETH
                   if (newPrice > 1000 && newPrice < 10000) {
                     setEthPrice(prev => {
                       const priceChanged = prev.usd !== newPrice;
@@ -127,6 +140,32 @@ export const useLiveData = () => {
                       
                       if (priceChanged) {
                         console.log(`🔄 LIVE ETH: $${prev.usd?.toFixed(2)} → $${newPrice.toFixed(2)} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(4)}%)`);
+                      }
+                      
+                      return {
+                        ...prev,
+                        usd: newPrice,
+                        lastUpdated: Date.now(),
+                        source: 'Coinbase Live',
+                        isStale: false,
+                        isLoading: false,
+                        error: null,
+                      };
+                    });
+                  }
+                }
+                
+                // Handle MATIC-USD updates
+                if (ticker.product_id === 'MATIC-USD' && ticker.price) {
+                  // Sanity check for MATIC
+                  if (newPrice > 0.1 && newPrice < 10) {
+                    setMaticPrice(prev => {
+                      const priceChanged = prev.usd !== newPrice;
+                      const changeAmount = prev.usd ? newPrice - prev.usd : 0;
+                      const changePercent = prev.usd ? ((changeAmount / prev.usd) * 100) : 0;
+                      
+                      if (priceChanged) {
+                        console.log(`🔄 LIVE MATIC: $${prev.usd?.toFixed(4)} → $${newPrice.toFixed(4)} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(4)}%)`);
                       }
                       
                       return {
@@ -236,71 +275,79 @@ export const useLiveData = () => {
     }
   }, []);
 
-  // Fetch gas prices with intelligent estimates
-  const fetchGasData = useCallback(async () => {
+  // Fetch real gas prices using RPC calls
+  const fetchGasData = useCallback(async (network: 'ethereum' | 'polygon' = 'ethereum') => {
     try {
-      console.log('⛽ Setting up gas price tracking...');
+      console.log(`⛽ Fetching live gas data for ${network}...`);
       
-      // Use realistic estimates based on current network conditions
-      // These are updated based on recent mainnet observations
-      const getCurrentGasEstimates = () => {
-        const now = new Date();
-        const hour = now.getUTCHours();
-        
-        // Adjust gas prices based on typical network usage patterns
-        let multiplier = 1.0;
-        
-        // Peak hours (UTC): 12-16 (Asia) and 20-24 (US/Europe)
-        if ((hour >= 12 && hour <= 16) || (hour >= 20 && hour <= 24)) {
-          multiplier = 1.4; // Higher during peak times
-        } else if (hour >= 2 && hour <= 6) {
-          multiplier = 0.7; // Lower during off-peak
-        }
-        
-        const baseGas = {
-          ethereum: { 
-            standard: Math.round(20 * multiplier), 
-            fast: Math.round(30 * multiplier), 
-            instant: Math.round(45 * multiplier) 
-          },
-          polygon: { standard: 30, fast: 50, instant: 80 },
-          arbitrum: { standard: 1, fast: 2, instant: 3 }
-        };
-        
-        return baseGas.ethereum; // Default to Ethereum
-      };
+      // Import the gas utilities
+      const { getFeeQuote, formatGwei } = await import('../utils/gas');
       
-      const gasEstimates = getCurrentGasEstimates();
+      // Get real-time gas data from the blockchain
+      const quote = await getFeeQuote(network);
+      
+      const baseGwei = formatGwei(quote.baseFeePerGas);
+      const priorityGwei = formatGwei(quote.priorityFeePerGas);
+      const maxGwei = formatGwei(quote.maxFeePerGas);
+      
+      // Calculate different speed options
+      const standard = Math.round(baseGwei + priorityGwei);
+      const fast = Math.round(maxGwei);
+      const instant = Math.round(maxGwei * 1.2);
       
       setGasData({
-        standard: gasEstimates.standard,
-        fast: gasEstimates.fast,
-        instant: gasEstimates.instant,
-        baseFee: null,
-        priorityFee: null,
+        standard,
+        fast,
+        instant,
+        baseFee: baseGwei,
+        priorityFee: priorityGwei,
         lastUpdated: Date.now(),
-        isStale: false, // These are time-based estimates, not stale
-        network: 'ethereum',
+        isStale: false,
+        network,
       });
       
-      console.log(`⛽ Gas estimates set: ${gasEstimates.standard}/${gasEstimates.fast}/${gasEstimates.instant} gwei (time-adjusted)`);
+      console.log(`⛽ Live gas data: ${standard}/${fast}/${instant} gwei (base: ${baseGwei.toFixed(1)}, priority: ${priorityGwei.toFixed(1)})`);
       
     } catch (error) {
-      console.warn('⚠️ Gas estimation failed:', error);
+      console.warn('⚠️ RPC gas fetch failed, using estimates:', error);
       
-      // Fallback to conservative estimates
+      // Fallback to time-based estimates
+      const now = new Date();
+      const hour = now.getUTCHours();
+      let multiplier = 1.0;
+      
+      // Peak hours adjustment
+      if ((hour >= 12 && hour <= 16) || (hour >= 20 && hour <= 24)) {
+        multiplier = 1.4;
+      } else if (hour >= 2 && hour <= 6) {
+        multiplier = 0.7;
+      }
+      
+      const estimates = {
+        ethereum: { 
+          standard: Math.round(20 * multiplier), 
+          fast: Math.round(30 * multiplier), 
+          instant: Math.round(45 * multiplier) 
+        },
+        polygon: { standard: 30, fast: 50, instant: 80 },
+      };
+      
+      const gasEst = estimates[network] || estimates.ethereum;
+      
       setGasData({
-        standard: 25,
-        fast: 35,
-        instant: 50,
+        standard: gasEst.standard,
+        fast: gasEst.fast,
+        instant: gasEst.instant,
         baseFee: null,
         priorityFee: null,
         lastUpdated: Date.now(),
-        isStale: true,
-        network: 'ethereum',
+        isStale: true, // Mark as estimated
+        network,
       });
+      
+      console.log(`⛽ Using time-adjusted estimates: ${gasEst.standard}/${gasEst.fast}/${gasEst.instant} gwei`);
     }
-  }, []); // Stable callback
+  }, []);
 
   // Check if data is stale
   const checkStaleness = useCallback(() => {
@@ -323,7 +370,7 @@ export const useLiveData = () => {
     
     // Start with immediate fallback fetch for initial price
     fetchEthPriceFallback();
-    fetchGasData();
+    fetchGasData('ethereum'); // Start with Ethereum gas data
 
     // Connect WebSocket for real-time updates
     const ws = connectCoinbaseWebSocket();
@@ -340,8 +387,8 @@ export const useLiveData = () => {
       });
     }, 30000);
 
-    // Gas polling (no WebSocket available for gas prices)
-    const gasInterval = setInterval(fetchGasData, GAS_POLL_INTERVAL);
+    // Gas polling with network-specific calls
+    const gasInterval = setInterval(() => fetchGasData('ethereum'), GAS_POLL_INTERVAL);
     const stalenessInterval = setInterval(checkStaleness, 5000);
 
     return () => {
@@ -393,6 +440,7 @@ export const useLiveData = () => {
   return {
     ethPrice,
     usdcPrice,
+    maticPrice,
     gasData,
     networkHealth,
     calculateGasCost,
